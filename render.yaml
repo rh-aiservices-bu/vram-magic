@@ -1,0 +1,126 @@
+# VRAM Magic - Render Platform Configuration
+# Production deployment configuration for Render.com
+
+services:
+  # Main web service
+  - type: web
+    name: vram-magic
+    env: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: true
+    branch: main
+
+    # Environment variables
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_APP_ENV
+        value: production
+      - key: VITE_FEATURE_DARK_MODE
+        value: true
+      - key: VITE_FEATURE_ACCESSIBILITY
+        value: true
+      - key: VITE_FEATURE_EXPORT
+        value: true
+      - key: VITE_FEATURE_ADVANCED_CHARTS
+        value: true
+      - key: VITE_FEATURE_MODEL_COMPARISON
+        value: true
+
+    # Custom headers
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-XSS-Protection
+        value: "1; mode=block"
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "geolocation=(), microphone=(), camera=()"
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none';"
+
+    # Routing and redirects
+    routes:
+      - type: redirect
+        source: /app/*
+        destination: /
+        status: 301
+      - type: redirect
+        source: /calculator/*
+        destination: /
+        status: 301
+      - type: rewrite
+        source: /api/models
+        destination: /models/models.json
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # Preview environment for pull requests
+  - type: web
+    name: vram-magic-preview
+    env: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    branch: develop
+
+    envVars:
+      - key: NODE_ENV
+        value: development
+      - key: VITE_APP_ENV
+        value: development
+      - key: VITE_FEATURE_DEBUG_MODE
+        value: true
+      - key: VITE_FEATURE_DARK_MODE
+        value: true
+      - key: VITE_FEATURE_ACCESSIBILITY
+        value: true
+
+# Background worker for health checks (optional)
+# - type: worker
+#   name: vram-magic-health-monitor
+#   env: node
+#   buildCommand: npm ci
+#   startCommand: node scripts/health-monitor.js
+#   envVars:
+#     - key: MONITOR_URL
+#       value: https://vram-magic.onrender.com
+
+# Cron jobs (optional for maintenance tasks)
+# - type: cron
+#   name: vram-magic-maintenance
+#   env: node
+#   buildCommand: npm ci
+#   schedule: "0 2 * * *"  # Daily at 2 AM
+#   startCommand: node scripts/maintenance.js
+
+# Database (if needed for future features)
+# databases:
+#   - name: vram-magic-db
+#     databaseName: vram_magic
+#     user: vram_magic_user
+
+# Build configuration
+buildFilter:
+  paths:
+    - src/**
+    - public/**
+    - package.json
+    - package-lock.json
+    - vite.config.ts
+    - index.html
+  ignoredPaths:
+    - docs/**
+    - tests/**
+    - .storybook/**
+    - README.md

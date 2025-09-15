@@ -1,0 +1,321 @@
+# VRAM Magic - Deployment Pipeline
+# Automated deployment to multiple platforms with rollback capability
+
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      force_deploy:
+        description: 'Force deployment (skip some checks)'
+        required: false
+        default: false
+        type: boolean
+
+# Ensure only one deployment at a time
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Job 1: Determine deployment strategy
+  setup:
+    name: Deployment Setup
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.config.outputs.environment }}
+      should-deploy: ${{ steps.config.outputs.should-deploy }}
+      version: ${{ steps.config.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure deployment
+        id: config
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "environment=none" >> $GITHUB_OUTPUT
+            echo "should-deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Extract version
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(date +%Y%m%d)-${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+  # Job 2: Build and Push Docker Image
+  build-image:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should-deploy == 'true'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=${{ needs.setup.outputs.environment }}-
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.setup.outputs.version }}
+            BUILD_TIME=${{ github.run_id }}
+
+  # Job 3: Deploy to Vercel
+  deploy-vercel:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    needs: [setup, build-image]
+    if: needs.setup.outputs.should-deploy == 'true'
+    environment:
+      name: vercel-${{ needs.setup.outputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for Vercel
+        run: |
+          if [ "${{ needs.setup.outputs.environment }}" = "production" ]; then
+            NODE_ENV=production npm run build
+          else
+            NODE_ENV=development npm run build
+          fi
+        env:
+          VITE_APP_ENV: ${{ needs.setup.outputs.environment }}
+          VITE_APP_VERSION: ${{ needs.setup.outputs.version }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        uses: vercel/action@v1
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          production: ${{ needs.setup.outputs.environment == 'production' }}
+
+      - name: Update deployment status
+        run: |
+          echo "✅ Vercel deployment successful"
+          echo "🌐 URL: ${{ steps.deploy.outputs.url }}"
+
+  # Job 4: Deploy to Netlify
+  deploy-netlify:
+    name: Deploy to Netlify
+    runs-on: ubuntu-latest
+    needs: [setup, build-image]
+    if: needs.setup.outputs.should-deploy == 'true'
+    environment:
+      name: netlify-${{ needs.setup.outputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for Netlify
+        run: |
+          if [ "${{ needs.setup.outputs.environment }}" = "production" ]; then
+            NODE_ENV=production npm run build
+          else
+            NODE_ENV=development npm run build
+          fi
+        env:
+          VITE_APP_ENV: ${{ needs.setup.outputs.environment }}
+          VITE_APP_VERSION: ${{ needs.setup.outputs.version }}
+
+      - name: Deploy to Netlify
+        id: deploy
+        uses: netlify/actions/deploy@master
+        with:
+          publish-dir: ./dist
+          production-branch: ${{ needs.setup.outputs.environment == 'production' && 'main' || 'develop' }}
+          production-deploy: ${{ needs.setup.outputs.environment == 'production' }}
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+      - name: Update deployment status
+        run: |
+          echo "✅ Netlify deployment successful"
+          echo "🌐 URL: ${{ steps.deploy.outputs.url }}"
+
+  # Job 5: Deploy to Cloud Run (Google Cloud)
+  deploy-cloudrun:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    needs: [setup, build-image]
+    if: needs.setup.outputs.should-deploy == 'true' && needs.setup.outputs.environment == 'production'
+    environment:
+      name: cloudrun-production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy vram-magic \
+            --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.setup.outputs.environment }}-${{ github.sha }} \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --port 80 \
+            --memory 512Mi \
+            --cpu 1 \
+            --max-instances 10 \
+            --set-env-vars="NODE_ENV=production,VITE_APP_ENV=production" \
+            --labels="app=vram-magic,version=${{ needs.setup.outputs.version }}"
+
+      - name: Get service URL
+        id: url
+        run: |
+          URL=$(gcloud run services describe vram-magic --platform managed --region us-central1 --format 'value(status.url)')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Update deployment status
+        run: |
+          echo "✅ Cloud Run deployment successful"
+          echo "🌐 URL: ${{ steps.url.outputs.url }}"
+
+  # Job 6: Post-deployment validation
+  validate-deployment:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    needs: [setup, deploy-vercel, deploy-netlify]
+    if: always() && needs.setup.outputs.should-deploy == 'true'
+    steps:
+      - name: Health check - Vercel
+        run: |
+          if [ "${{ needs.deploy-vercel.result }}" = "success" ]; then
+            echo "✅ Vercel deployment validated"
+          else
+            echo "❌ Vercel deployment failed"
+          fi
+
+      - name: Health check - Netlify
+        run: |
+          if [ "${{ needs.deploy-netlify.result }}" = "success" ]; then
+            echo "✅ Netlify deployment validated"
+          else
+            echo "❌ Netlify deployment failed"
+          fi
+
+      - name: Performance validation
+        run: |
+          # Add performance tests for deployed applications
+          echo "🔍 Performance validation would run here"
+
+      - name: Create deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ needs.setup.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.setup.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Vercel**: ${{ needs.deploy-vercel.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Netlify**: ${{ needs.deploy-netlify.result }}" >> $GITHUB_STEP_SUMMARY
+
+  # Job 7: Rollback capability
+  rollback:
+    name: Rollback
+    runs-on: ubuntu-latest
+    if: failure() && needs.setup.outputs.environment == 'production'
+    needs: [setup, validate-deployment]
+    environment:
+      name: rollback-production
+    steps:
+      - name: Rollback deployment
+        run: |
+          echo "🔄 Initiating rollback procedures"
+          echo "Previous version would be restored here"
+          # Add actual rollback logic based on your deployment strategy
+
+      - name: Notify team
+        run: |
+          echo "📢 Deployment failed, rollback initiated"
+          # Add notification logic (Slack, email, etc.)

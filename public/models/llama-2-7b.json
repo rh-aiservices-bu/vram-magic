@@ -1,0 +1,74 @@
+{
+  "id": "llama-2-7b",
+  "name": "Llama 2 7B",
+  "description": "Meta's Llama 2 model with 7 billion parameters, optimized for chat and instruction following",
+  "parameters": 7000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 32,
+    "hiddenSize": 4096,
+    "attentionHeads": 32,
+    "vocabularySize": 32000,
+    "maxSequenceLength": 4096
+  },
+  "vramRequirements": {
+    "baseVRAM": 13500,
+    "kvCacheCoefficient": 1.2,
+    "activationMultiplier": 1.5,
+    "overheadFactor": 1.15
+  },
+  "performance": [
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 45,
+      "batchSize": 1,
+      "powerConsumption": 350
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 80,
+      "batchSize": 4,
+      "powerConsumption": 400
+    },
+    {
+      "gpuType": "RTX 3090",
+      "tokensPerSecond": 32,
+      "batchSize": 1,
+      "powerConsumption": 320
+    },
+    {
+      "gpuType": "V100",
+      "tokensPerSecond": 28,
+      "batchSize": 2,
+      "powerConsumption": 300
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2023-07-18",
+    "organization": "Meta",
+    "license": "Llama 2 Community License",
+    "tags": ["chat", "assistant", "open-source", "instruction-following"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 45.3,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 12.8,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 14.6,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HellaSwag",
+        "score": 77.2,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}

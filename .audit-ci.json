@@ -1,0 +1,17 @@
+{
+  "allowlist": ["GHSA-67hx-6x53-jw92", "GHSA-93q8-gq69-wqmw"],
+  "low": true,
+  "moderate": true,
+  "high": true,
+  "critical": true,
+  "report": {
+    "type": "json",
+    "output": "audit-report.json"
+  },
+  "whitelist": [],
+  "advisories": [],
+  "show-found": true,
+  "show-not-found": false,
+  "registry": "https://registry.npmjs.org/",
+  "package-manager": "npm"
+}

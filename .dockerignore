@@ -1,0 +1,113 @@
+# VRAM Magic - Docker Build Context Optimization
+# Exclude unnecessary files from Docker build context for faster builds
+
+# Development files
+.git/
+.github/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing and documentation
+tests/
+docs/
+storybook-static/
+.storybook/
+coverage/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment and configuration
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Storybook build outputs
+storybook-static/
+
+# Temporary folders
+tmp/
+temp/
+
+# Local development files
+*.local
+.cache/
+
+# Bundle analysis
+stats.html
+bundle-analyzer-report.html
+
+# Deployment files (don't include in image)
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile*
+.dockerignore
+
+# Specification and documentation
+specs/
+.specify/
+*.md
+!README.md
+
+# Scripts that shouldn't be in production
+scripts/

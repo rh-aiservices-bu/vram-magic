@@ -1,0 +1,104 @@
+# VRAM Magic - Docker Compose Configuration
+# Production-ready container orchestration with monitoring and security
+
+version: '3.8'
+
+services:
+  # Main application service
+  vram-magic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: vram-magic-app
+    restart: unless-stopped
+    ports:
+      - "${PORT:-80}:80"
+    environment:
+      - NODE_ENV=production
+      - VITE_APP_ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vram-magic.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.vram-magic.tls=true"
+      - "traefik.http.routers.vram-magic.tls.certresolver=letsencrypt"
+    networks:
+      - vram-magic-network
+    volumes:
+      - nginx-cache:/var/cache/nginx
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /var/cache/nginx
+
+  # Reverse proxy (optional, for production with SSL)
+  traefik:
+    image: traefik:v2.10
+    container_name: vram-magic-proxy
+    restart: unless-stopped
+    profiles:
+      - production
+    command:
+      - "--api.dashboard=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpcchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpcchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - vram-magic-network
+    depends_on:
+      - vram-magic
+
+  # Monitoring service (optional)
+  monitoring:
+    image: prom/prometheus:v2.40.0
+    container_name: vram-magic-monitoring
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - vram-magic-network
+
+# Networks
+networks:
+  vram-magic-network:
+    driver: bridge
+    name: vram-magic-network
+
+# Volumes
+volumes:
+  nginx-cache:
+    driver: local
+  letsencrypt:
+    driver: local
+  prometheus-data:
+    driver: local

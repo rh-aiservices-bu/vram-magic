@@ -1,0 +1,74 @@
+{
+  "id": "gpt-4",
+  "name": "GPT-4",
+  "description": "OpenAI's most capable model, GPT-4 can solve difficult problems with greater accuracy thanks to its broader general knowledge and advanced reasoning capabilities",
+  "parameters": 1760000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 120,
+    "hiddenSize": 12288,
+    "attentionHeads": 96,
+    "vocabularySize": 50257,
+    "maxSequenceLength": 8192
+  },
+  "vramRequirements": {
+    "baseVRAM": 3400000,
+    "kvCacheCoefficient": 1.4,
+    "activationMultiplier": 1.8,
+    "overheadFactor": 1.25
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 150,
+      "batchSize": 8,
+      "powerConsumption": 700
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 85,
+      "batchSize": 4,
+      "powerConsumption": 400
+    },
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 25,
+      "batchSize": 1,
+      "powerConsumption": 450
+    },
+    {
+      "gpuType": "V100",
+      "tokensPerSecond": 15,
+      "batchSize": 1,
+      "powerConsumption": 300
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2023-03-14",
+    "organization": "OpenAI",
+    "license": "Commercial",
+    "tags": ["reasoning", "multimodal", "commercial", "advanced"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 86.4,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 67.0,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 92.0,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HellaSwag",
+        "score": 95.3,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}

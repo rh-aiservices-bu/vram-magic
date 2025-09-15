@@ -1,0 +1,488 @@
+# VRAM Magic - Comprehensive Testing Pipeline
+# Focused testing workflow for pull requests and feature branches
+
+name: Test Suite
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ 'feature/*', 'bugfix/*', 'hotfix/*' ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of tests to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+          - accessibility
+          - performance
+          - security
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  CACHE_VERSION: 'v1'
+
+jobs:
+  # Job 1: Test Matrix Setup
+  setup:
+    name: Test Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      test-matrix: ${{ steps.matrix.outputs.test-matrix }}
+      cache-key: ${{ steps.cache-keys.outputs.node-modules }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate test matrix
+        id: matrix
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TEST_TYPE="${{ github.event.inputs.test_type }}"
+          else
+            TEST_TYPE="all"
+          fi
+
+          case "$TEST_TYPE" in
+            unit)
+              MATRIX='["unit"]'
+              ;;
+            integration)
+              MATRIX='["integration"]'
+              ;;
+            accessibility)
+              MATRIX='["accessibility"]'
+              ;;
+            performance)
+              MATRIX='["performance"]'
+              ;;
+            security)
+              MATRIX='["security"]'
+              ;;
+            all|*)
+              MATRIX='["unit", "integration", "accessibility", "performance", "security"]'
+              ;;
+          esac
+
+          echo "test-matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+      - name: Generate cache keys
+        id: cache-keys
+        run: |
+          echo "node-modules=${{ env.CACHE_VERSION }}-${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}" >> $GITHUB_OUTPUT
+
+  # Job 2: Dependency Installation
+  install:
+    name: Install Dependencies
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Cache node modules
+        uses: actions/cache@v3
+        id: cache-node-modules
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+          restore-keys: |
+            ${{ env.CACHE_VERSION }}-${{ runner.os }}-node-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+  # Job 3: Unit Tests
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: [setup, install]
+    if: contains(fromJson(needs.setup.outputs.test-matrix), 'unit')
+    strategy:
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Run unit tests
+        run: |
+          npm test -- \
+            --run \
+            --coverage \
+            --shard=${{ matrix.shard }}/4 \
+            --reporter=verbose \
+            --reporter=junit \
+            --outputFile=test-results-unit-${{ matrix.shard }}.xml \
+            tests/unit/
+        env:
+          CI: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: unit-test-results-${{ matrix.shard }}
+          path: |
+            test-results-unit-${{ matrix.shard }}.xml
+            coverage/
+          retention-days: 7
+
+  # Job 4: Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [setup, install]
+    if: contains(fromJson(needs.setup.outputs.test-matrix), 'integration')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: test
+
+      - name: Start test server
+        run: |
+          npm run preview &
+          sleep 5
+        env:
+          CI: true
+
+      - name: Run integration tests
+        run: |
+          npm test -- \
+            --run \
+            --reporter=verbose \
+            --reporter=junit \
+            --outputFile=test-results-integration.xml \
+            tests/integration/
+        env:
+          CI: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: integration-test-results
+          path: test-results-integration.xml
+          retention-days: 7
+
+  # Job 5: Accessibility Tests
+  accessibility-tests:
+    name: Accessibility Tests
+    runs-on: ubuntu-latest
+    needs: [setup, install]
+    if: contains(fromJson(needs.setup.outputs.test-matrix), 'accessibility')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Run accessibility tests
+        run: |
+          npm test -- \
+            --run \
+            --reporter=verbose \
+            --reporter=junit \
+            --outputFile=test-results-accessibility.xml \
+            tests/accessibility/
+        env:
+          CI: true
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright accessibility tests
+        run: |
+          npm run build
+          npm run preview &
+          sleep 5
+          npx playwright test --config=playwright.accessibility.config.js
+        env:
+          CI: true
+
+      - name: Upload accessibility reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: accessibility-reports
+          path: |
+            test-results-accessibility.xml
+            playwright-report/
+            accessibility-violations.json
+          retention-days: 7
+
+  # Job 6: Performance Tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [setup, install]
+    if: contains(fromJson(needs.setup.outputs.test-matrix), 'performance')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Build for performance testing
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Run performance tests
+        run: |
+          # Start the application
+          npm run preview &
+          sleep 5
+
+          # Run Lighthouse performance audit
+          npx lighthouse http://localhost:4173 \
+            --output=json \
+            --output-path=lighthouse-performance.json \
+            --chrome-flags="--headless --no-sandbox" \
+            --quiet
+
+          # Run bundle size analysis
+          npm run size-check
+
+          # Run custom performance tests
+          npm test -- \
+            --run \
+            --reporter=verbose \
+            tests/performance/
+        env:
+          CI: true
+
+      - name: Performance budget check
+        run: |
+          # Check bundle size limits
+          BUNDLE_SIZE=$(find dist -name '*.js' -type f -exec wc -c {} + | awk '{sum+=$1} END {print sum}')
+          BUNDLE_SIZE_KB=$((BUNDLE_SIZE / 1024))
+
+          echo "Bundle size: ${BUNDLE_SIZE_KB}KB"
+
+          if [ $BUNDLE_SIZE_KB -gt 1024 ]; then
+            echo "❌ Bundle size exceeds 1MB limit"
+            exit 1
+          else
+            echo "✅ Bundle size within limits"
+          fi
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: performance-reports
+          path: |
+            lighthouse-performance.json
+            bundle-analysis.html
+          retention-days: 7
+
+  # Job 7: Security Tests
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: [setup, install]
+    if: contains(fromJson(needs.setup.outputs.test-matrix), 'security')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Run security audit
+        run: |
+          npm audit --audit-level=moderate --json > npm-audit.json
+          npx audit-ci --config .audit-ci.json
+        continue-on-error: true
+
+      - name: License compliance check
+        run: |
+          npx license-checker \
+            --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' \
+            --json > license-report.json
+
+      - name: OWASP ZAP security scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'http://localhost:4173'
+          rules_file_name: '.zap/rules.conf'
+          cmd_options: '-a'
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            npm-audit.json
+            license-report.json
+            report_html.html
+            report_json.json
+          retention-days: 7
+
+  # Job 8: Test Results Summary
+  test-summary:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, accessibility-tests, performance-tests, security-tests]
+    if: always()
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v3
+        with:
+          path: test-results
+
+      - name: Generate test summary
+        run: |
+          echo "## 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Unit tests summary
+          if [ "${{ needs.unit-tests.result }}" = "success" ]; then
+            echo "✅ **Unit Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.unit-tests.result }}" = "failure" ]; then
+            echo "❌ **Unit Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Unit Tests**: Skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Integration tests summary
+          if [ "${{ needs.integration-tests.result }}" = "success" ]; then
+            echo "✅ **Integration Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.integration-tests.result }}" = "failure" ]; then
+            echo "❌ **Integration Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Integration Tests**: Skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Accessibility tests summary
+          if [ "${{ needs.accessibility-tests.result }}" = "success" ]; then
+            echo "✅ **Accessibility Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.accessibility-tests.result }}" = "failure" ]; then
+            echo "❌ **Accessibility Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Accessibility Tests**: Skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Performance tests summary
+          if [ "${{ needs.performance-tests.result }}" = "success" ]; then
+            echo "✅ **Performance Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.performance-tests.result }}" = "failure" ]; then
+            echo "❌ **Performance Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Performance Tests**: Skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Security tests summary
+          if [ "${{ needs.security-tests.result }}" = "success" ]; then
+            echo "✅ **Security Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.security-tests.result }}" = "failure" ]; then
+            echo "❌ **Security Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏭️ **Security Tests**: Skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check overall test status
+        run: |
+          FAILED_JOBS=0
+
+          if [ "${{ needs.unit-tests.result }}" = "failure" ]; then
+            FAILED_JOBS=$((FAILED_JOBS + 1))
+          fi
+          if [ "${{ needs.integration-tests.result }}" = "failure" ]; then
+            FAILED_JOBS=$((FAILED_JOBS + 1))
+          fi
+          if [ "${{ needs.accessibility-tests.result }}" = "failure" ]; then
+            FAILED_JOBS=$((FAILED_JOBS + 1))
+          fi
+          if [ "${{ needs.performance-tests.result }}" = "failure" ]; then
+            FAILED_JOBS=$((FAILED_JOBS + 1))
+          fi
+          if [ "${{ needs.security-tests.result }}" = "failure" ]; then
+            FAILED_JOBS=$((FAILED_JOBS + 1))
+          fi
+
+          if [ $FAILED_JOBS -gt 0 ]; then
+            echo "❌ $FAILED_JOBS test suite(s) failed"
+            exit 1
+          else
+            echo "✅ All test suites passed"
+          fi

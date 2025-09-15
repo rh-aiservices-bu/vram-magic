@@ -1,0 +1,74 @@
+{
+  "id": "mistral-7b",
+  "name": "Mistral 7B",
+  "description": "Mistral AI's 7B parameter model with efficient attention mechanisms and strong performance across various tasks",
+  "parameters": 7240000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 32,
+    "hiddenSize": 4096,
+    "attentionHeads": 32,
+    "vocabularySize": 32000,
+    "maxSequenceLength": 32768
+  },
+  "vramRequirements": {
+    "baseVRAM": 14000,
+    "kvCacheCoefficient": 1.1,
+    "activationMultiplier": 1.4,
+    "overheadFactor": 1.12
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 320,
+      "batchSize": 16,
+      "powerConsumption": 500
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 180,
+      "batchSize": 8,
+      "powerConsumption": 350
+    },
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 95,
+      "batchSize": 4,
+      "powerConsumption": 320
+    },
+    {
+      "gpuType": "RTX 3090",
+      "tokensPerSecond": 65,
+      "batchSize": 2,
+      "powerConsumption": 300
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2023-09-27",
+    "organization": "Mistral AI",
+    "license": "Apache 2.0",
+    "tags": ["efficient", "open-source", "instruct", "commercial"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 60.1,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 40.2,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 52.2,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HellaSwag",
+        "score": 83.3,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}

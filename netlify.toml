@@ -1,0 +1,163 @@
+# VRAM Magic - Netlify Configuration
+# Production-ready deployment configuration for Netlify platform
+
+[build]
+  # Build settings
+  command = "npm run build"
+  publish = "dist"
+
+  # Build environment
+  environment = { NODE_ENV = "production", VITE_APP_ENV = "production" }
+
+[build.processing]
+  skip_processing = false
+
+[build.processing.css]
+  bundle = true
+  minify = true
+
+[build.processing.js]
+  bundle = true
+  minify = true
+
+[build.processing.html]
+  pretty_urls = true
+
+[build.processing.images]
+  compress = true
+
+# Context-specific builds
+[context.production]
+  command = "npm ci && npm run build"
+  environment = {
+    NODE_ENV = "production",
+    VITE_APP_ENV = "production",
+    VITE_FEATURE_DARK_MODE = "true",
+    VITE_FEATURE_ACCESSIBILITY = "true",
+    VITE_FEATURE_EXPORT = "true",
+    VITE_FEATURE_ADVANCED_CHARTS = "true",
+    VITE_FEATURE_MODEL_COMPARISON = "true"
+  }
+
+[context.deploy-preview]
+  command = "npm ci && npm run build"
+  environment = {
+    NODE_ENV = "development",
+    VITE_APP_ENV = "development",
+    VITE_FEATURE_DEBUG_MODE = "true"
+  }
+
+[context.branch-deploy]
+  command = "npm ci && npm run build"
+  environment = { NODE_ENV = "development", VITE_APP_ENV = "development" }
+
+# Redirects and rewrites for SPA
+[[redirects]]
+  from = "/app/*"
+  to = "/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/calculator/*"
+  to = "/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/api/models"
+  to = "/models/models.json"
+  status = 200
+
+[[redirects]]
+  # Catch-all for SPA routing
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Custom headers for security and performance
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none';"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, s-maxage=3600"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "*.woff2"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Edge functions (if needed for API endpoints)
+# [[edge_functions]]
+#   function = "health-check"
+#   path = "/health"
+
+# Plugin configuration
+[[plugins]]
+  package = "@netlify/plugin-lighthouse"
+
+  [plugins.inputs]
+    output_path = "./lighthouse"
+
+[[plugins]]
+  package = "netlify-plugin-submit-sitemap"
+
+  [plugins.inputs]
+    baseUrl = "https://vram-magic.netlify.app"
+    sitemapPath = "/sitemap.xml"
+    ignorePeriod = 0
+    providers = [
+      "google",
+      "bing"
+    ]
+
+# Form handling (if contact forms are added later)
+# [forms]
+#   contact = "/contact"
+
+# Split testing (A/B testing)
+# [[split_tests]]
+#   path = "/*"
+#   branches = [
+#     { branch = "main", percentage = 100 },
+#   ]
+
+# Environment variables
+[template.environment]
+  VITE_APP_ENV = "Deployment environment"
+  VITE_FEATURE_DARK_MODE = "Enable dark mode feature"
+  VITE_FEATURE_ACCESSIBILITY = "Enable accessibility features"

@@ -1,0 +1,74 @@
+{
+  "id": "falcon-40b",
+  "name": "Falcon 40B",
+  "description": "Technology Innovation Institute's powerful 40B parameter model with RefinedWeb dataset training and strong multilingual capabilities",
+  "parameters": 40000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 60,
+    "hiddenSize": 8192,
+    "attentionHeads": 64,
+    "vocabularySize": 65024,
+    "maxSequenceLength": 2048
+  },
+  "vramRequirements": {
+    "baseVRAM": 80000,
+    "kvCacheCoefficient": 1.3,
+    "activationMultiplier": 1.6,
+    "overheadFactor": 1.18
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 180,
+      "batchSize": 8,
+      "powerConsumption": 650
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 95,
+      "batchSize": 4,
+      "powerConsumption": 400
+    },
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 28,
+      "batchSize": 1,
+      "powerConsumption": 420
+    },
+    {
+      "gpuType": "V100",
+      "tokensPerSecond": 18,
+      "batchSize": 1,
+      "powerConsumption": 300
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2023-05-25",
+    "organization": "Technology Innovation Institute",
+    "license": "Apache 2.0",
+    "tags": ["open-source", "multilingual", "instruct", "research"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 55.4,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 36.6,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 19.6,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HellaSwag",
+        "score": 84.3,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}

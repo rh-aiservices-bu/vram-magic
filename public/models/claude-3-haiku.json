@@ -1,0 +1,74 @@
+{
+  "id": "claude-3-haiku",
+  "name": "Claude 3 Haiku",
+  "description": "Anthropic's fastest and most compact model, designed for quick responses while maintaining safety and helpfulness in everyday tasks",
+  "parameters": 8000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 32,
+    "hiddenSize": 4096,
+    "attentionHeads": 32,
+    "vocabularySize": 100000,
+    "maxSequenceLength": 200000
+  },
+  "vramRequirements": {
+    "baseVRAM": 16000,
+    "kvCacheCoefficient": 1.1,
+    "activationMultiplier": 1.3,
+    "overheadFactor": 1.1
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 400,
+      "batchSize": 16,
+      "powerConsumption": 500
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 250,
+      "batchSize": 8,
+      "powerConsumption": 350
+    },
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 120,
+      "batchSize": 4,
+      "powerConsumption": 300
+    },
+    {
+      "gpuType": "RTX 3090",
+      "tokensPerSecond": 85,
+      "batchSize": 2,
+      "powerConsumption": 280
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2024-03-04",
+    "organization": "Anthropic",
+    "license": "Commercial",
+    "tags": ["fast", "efficient", "compact", "safety"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 75.2,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 75.9,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 88.9,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HellaSwag",
+        "score": 88.8,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}

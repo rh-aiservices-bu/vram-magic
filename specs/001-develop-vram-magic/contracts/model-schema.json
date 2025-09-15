@@ -1,0 +1,235 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vram-magic.app/schemas/model.json",
+  "title": "LLM Model Configuration",
+  "description": "Schema for LLM model JSON files in the models/ directory",
+  "type": "object",
+  "required": [
+    "id",
+    "name", 
+    "description",
+    "parameters",
+    "precision",
+    "architecture",
+    "vramRequirements",
+    "performance",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique model identifier (lowercase, hyphens allowed)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable model name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the model"
+    },
+    "parameters": {
+      "type": "number",
+      "minimum": 1000000,
+      "description": "Total number of parameters"
+    },
+    "precision": {
+      "type": "string",
+      "enum": ["fp32", "fp16", "int8", "int4"],
+      "description": "Data precision used for inference"
+    },
+    "architecture": {
+      "type": "object",
+      "required": ["layers", "hiddenSize", "attentionHeads", "vocabularySize", "maxSequenceLength"],
+      "properties": {
+        "layers": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Number of transformer layers"
+        },
+        "hiddenSize": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Hidden dimension size"
+        },
+        "attentionHeads": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Number of attention heads"
+        },
+        "vocabularySize": {
+          "type": "number",
+          "minimum": 1000,
+          "description": "Size of token vocabulary"
+        },
+        "maxSequenceLength": {
+          "type": "number",
+          "minimum": 512,
+          "description": "Maximum supported sequence length"
+        }
+      }
+    },
+    "vramRequirements": {
+      "type": "object",
+      "required": ["baseVRAM", "kvCacheCoefficient", "activationMultiplier", "overheadFactor"],
+      "properties": {
+        "baseVRAM": {
+          "type": "number",
+          "minimum": 100,
+          "description": "Base model memory in MB"
+        },
+        "kvCacheCoefficient": {
+          "type": "number",
+          "minimum": 0.1,
+          "description": "KV-cache scaling coefficient"
+        },
+        "activationMultiplier": {
+          "type": "number",
+          "minimum": 1,
+          "description": "Activation memory multiplier"
+        },
+        "overheadFactor": {
+          "type": "number",
+          "minimum": 1.0,
+          "maximum": 2.0,
+          "description": "Memory overhead factor (typically 1.1-1.2)"
+        }
+      }
+    },
+    "performance": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Performance metrics for different GPU types",
+      "items": {
+        "type": "object",
+        "required": ["gpuType", "tokensPerSecond", "batchSize", "powerConsumption"],
+        "properties": {
+          "gpuType": {
+            "type": "string",
+            "minLength": 1,
+            "description": "GPU model name"
+          },
+          "tokensPerSecond": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Inference speed in tokens per second"
+          },
+          "batchSize": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Optimal batch size for this GPU"
+          },
+          "powerConsumption": {
+            "type": "number",
+            "minimum": 50,
+            "description": "Power consumption in watts during inference"
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["releaseDate", "organization", "license", "tags"],
+      "properties": {
+        "releaseDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Model release date (ISO format)"
+        },
+        "organization": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Organization that created the model"
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "description": "License under which the model is released"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Categorization tags"
+        },
+        "benchmarks": {
+          "type": "array",
+          "description": "Optional benchmark scores",
+          "items": {
+            "type": "object",
+            "required": ["name", "score", "unit"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Benchmark name"
+              },
+              "score": {
+                "type": "number",
+                "description": "Benchmark score"
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Score unit (e.g., accuracy, perplexity)"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "id": "llama-2-7b",
+      "name": "Llama 2 7B",
+      "description": "Meta's Llama 2 model with 7 billion parameters",
+      "parameters": 7000000000,
+      "precision": "fp16",
+      "architecture": {
+        "layers": 32,
+        "hiddenSize": 4096,
+        "attentionHeads": 32,
+        "vocabularySize": 32000,
+        "maxSequenceLength": 4096
+      },
+      "vramRequirements": {
+        "baseVRAM": 13500,
+        "kvCacheCoefficient": 1.2,
+        "activationMultiplier": 1.5,
+        "overheadFactor": 1.15
+      },
+      "performance": [
+        {
+          "gpuType": "RTX 4090",
+          "tokensPerSecond": 45,
+          "batchSize": 1,
+          "powerConsumption": 350
+        },
+        {
+          "gpuType": "A100",
+          "tokensPerSecond": 80,
+          "batchSize": 4,
+          "powerConsumption": 400
+        }
+      ],
+      "metadata": {
+        "releaseDate": "2023-07-18",
+        "organization": "Meta",
+        "license": "Llama 2 Community License",
+        "tags": ["chat", "assistant", "open-source"],
+        "benchmarks": [
+          {
+            "name": "MMLU",
+            "score": 45.3,
+            "unit": "accuracy"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "id": "claude-3-sonnet",
+  "name": "Claude 3 Sonnet",
+  "description": "Anthropic's Claude 3 Sonnet model, balancing intelligence and speed for a wide range of tasks",
+  "parameters": 90000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 80,
+    "hiddenSize": 16384,
+    "attentionHeads": 128,
+    "vocabularySize": 100000,
+    "maxSequenceLength": 200000
+  },
+  "vramRequirements": {
+    "baseVRAM": 175000,
+    "kvCacheCoefficient": 1.4,
+    "activationMultiplier": 2.0,
+    "overheadFactor": 1.25
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 120,
+      "batchSize": 4,
+      "powerConsumption": 650
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 55,
+      "batchSize": 2,
+      "powerConsumption": 450
+    },
+    {
+      "gpuType": "H100 SXM",
+      "tokensPerSecond": 180,
+      "batchSize": 8,
+      "powerConsumption": 700
+    },
+    {
+      "gpuType": "MI300X",
+      "tokensPerSecond": 95,
+      "batchSize": 4,
+      "powerConsumption": 550
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2024-03-04",
+    "organization": "Anthropic",
+    "license": "Commercial",
+    "tags": ["reasoning", "analysis", "writing", "coding", "multimodal", "constitutional-ai"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 79.0,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 73.0,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 92.3,
+        "unit": "accuracy"
+      },
+      {
+        "name": "MATH",
+        "score": 40.5,
+        "unit": "accuracy"
+      },
+      {
+        "name": "BIG-Bench-Hard",
+        "score": 69.0,
+        "unit": "accuracy"
+      },
+      {
+        "name": "DROP",
+        "score": 87.4,
+        "unit": "f1-score"
+      }
+    ]
+  }
+}

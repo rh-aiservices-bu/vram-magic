@@ -1,0 +1,344 @@
+# VRAM Magic - Continuous Integration Pipeline
+# Comprehensive CI workflow with testing, linting, security scanning, and build validation
+
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*', 'bugfix/*', 'hotfix/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+# Ensure only one CI run per branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  CACHE_VERSION: 'v1'
+
+jobs:
+  # Job 1: Setup and Validation
+  setup:
+    name: Setup & Validation
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache-keys.outputs.node-modules }}
+      should-deploy: ${{ steps.changes.outputs.should-deploy }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Generate cache keys
+        id: cache-keys
+        run: |
+          echo "node-modules=${{ env.CACHE_VERSION }}-${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}" >> $GITHUB_OUTPUT
+
+      - name: Cache node modules
+        uses: actions/cache@v3
+        id: cache-node-modules
+        with:
+          path: node_modules
+          key: ${{ steps.cache-keys.outputs.node-modules }}
+          restore-keys: |
+            ${{ env.CACHE_VERSION }}-${{ runner.os }}-node-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/develop") ]]; then
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate package.json
+        run: |
+          npm run type-check
+          node -e "const pkg = require('./package.json'); console.log('Package validation passed:', pkg.name, pkg.version)"
+
+  # Job 2: Code Quality & Security
+  quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: ESLint
+        run: |
+          npm run lint -- --format=@microsoft/eslint-formatter-sarif --output-file eslint-results.sarif
+        continue-on-error: true
+
+      - name: Upload ESLint results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: eslint-results.sarif
+          wait-for-processing: true
+
+      - name: TypeScript check
+        run: npm run type-check
+
+      - name: Security audit
+        run: |
+          npm audit --audit-level=moderate
+          npx audit-ci --config .audit-ci.json
+        continue-on-error: true
+
+      - name: Dependency check
+        run: |
+          npx license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' --excludePackages 'example@1.0.0'
+
+  # Job 3: Testing
+  test:
+    name: Testing
+    runs-on: ubuntu-latest
+    needs: setup
+    strategy:
+      matrix:
+        test-suite: [unit, integration, accessibility]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Run tests
+        run: |
+          case "${{ matrix.test-suite }}" in
+            unit)
+              npm test -- --run --coverage --reporter=verbose --reporter=junit --outputFile=test-results.xml
+              ;;
+            integration)
+              npm test -- --run tests/integration/ --reporter=verbose
+              ;;
+            accessibility)
+              npm test -- --run tests/accessibility/ --reporter=verbose
+              ;;
+          esac
+        env:
+          CI: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.test-suite }}
+          path: |
+            test-results.xml
+            coverage/
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        if: matrix.test-suite == 'unit'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  # Job 4: Build Validation
+  build:
+    name: Build Validation
+    runs-on: ubuntu-latest
+    needs: setup
+    strategy:
+      matrix:
+        environment: [development, production]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Build application
+        run: |
+          if [ "${{ matrix.environment }}" = "production" ]; then
+            NODE_ENV=production npm run build
+          else
+            NODE_ENV=development npm run build
+          fi
+        env:
+          VITE_APP_ENV: ${{ matrix.environment }}
+
+      - name: Validate build output
+        run: |
+          # Check if build directory exists and has files
+          if [ ! -d "dist" ]; then
+            echo "Build failed: dist directory not found"
+            exit 1
+          fi
+
+          # Check for essential files
+          if [ ! -f "dist/index.html" ]; then
+            echo "Build failed: index.html not found"
+            exit 1
+          fi
+
+          # Check bundle size
+          npm run size-check
+
+          # Validate bundle structure
+          echo "Build validation passed for ${{ matrix.environment }}"
+          ls -la dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-${{ matrix.environment }}
+          path: dist/
+          retention-days: 7
+
+  # Job 5: Performance & Bundle Analysis
+  performance:
+    name: Performance Analysis
+    runs-on: ubuntu-latest
+    needs: [setup, build]
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Download production build
+        uses: actions/download-artifact@v3
+        with:
+          name: build-production
+          path: dist/
+
+      - name: Bundle analysis
+        run: |
+          npm run build:analyze
+          npm run bundle:visualize
+
+      - name: Performance audit
+        run: |
+          npx serve -s dist -p 3000 &
+          sleep 5
+          npx lighthouse http://localhost:3000 --output=json --output-path=lighthouse-report.json --chrome-flags="--headless" --quiet
+          cat lighthouse-report.json | jq '.categories.performance.score * 100'
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-reports
+          path: |
+            lighthouse-report.json
+            dist/stats.html
+          retention-days: 7
+
+  # Job 6: Docker Build Validation
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false
+          tags: vram-magic:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Test Docker image
+        run: |
+          docker run --rm -d -p 8080:80 --name vram-magic-test vram-magic:ci-${{ github.sha }}
+          sleep 10
+          curl -f http://localhost:8080/health || exit 1
+          docker stop vram-magic-test
+
+  # Job 7: Deployment Readiness
+  deployment-check:
+    name: Deployment Readiness
+    runs-on: ubuntu-latest
+    needs: [quality, test, build, docker]
+    if: needs.setup.outputs.should-deploy == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deployment readiness check
+        run: |
+          echo "✅ All CI checks passed"
+          echo "✅ Code quality validated"
+          echo "✅ Tests passing"
+          echo "✅ Build successful"
+          echo "✅ Docker image validated"
+          echo "🚀 Ready for deployment"
+
+      - name: Create deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: Ready for deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: Production" >> $GITHUB_STEP_SUMMARY

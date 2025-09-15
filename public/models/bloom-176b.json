@@ -1,0 +1,74 @@
+{
+  "id": "bloom-176b",
+  "name": "BLOOM 176B",
+  "description": "BigScience's large multilingual language model trained on 46 natural languages and 13 programming languages with collaborative open science approach",
+  "parameters": 176000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 70,
+    "hiddenSize": 14336,
+    "attentionHeads": 112,
+    "vocabularySize": 250680,
+    "maxSequenceLength": 2048
+  },
+  "vramRequirements": {
+    "baseVRAM": 352000,
+    "kvCacheCoefficient": 1.4,
+    "activationMultiplier": 1.8,
+    "overheadFactor": 1.22
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 90,
+      "batchSize": 4,
+      "powerConsumption": 700
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 45,
+      "batchSize": 2,
+      "powerConsumption": 400
+    },
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 12,
+      "batchSize": 1,
+      "powerConsumption": 450
+    },
+    {
+      "gpuType": "V100",
+      "tokensPerSecond": 8,
+      "batchSize": 1,
+      "powerConsumption": 300
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2022-07-06",
+    "organization": "BigScience",
+    "license": "RAIL License",
+    "tags": ["multilingual", "open-science", "research", "collaborative"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 57.1,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 18.1,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 6.6,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HellaSwag",
+        "score": 73.0,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}

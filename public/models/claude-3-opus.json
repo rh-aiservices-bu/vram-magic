@@ -1,0 +1,74 @@
+{
+  "id": "claude-3-opus",
+  "name": "Claude 3 Opus",
+  "description": "Anthropic's most powerful model, excelling at highly complex tasks requiring deep reasoning, nuanced understanding, and sophisticated analysis",
+  "parameters": 175000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 96,
+    "hiddenSize": 14336,
+    "attentionHeads": 112,
+    "vocabularySize": 100000,
+    "maxSequenceLength": 200000
+  },
+  "vramRequirements": {
+    "baseVRAM": 350000,
+    "kvCacheCoefficient": 1.6,
+    "activationMultiplier": 1.7,
+    "overheadFactor": 1.2
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 120,
+      "batchSize": 4,
+      "powerConsumption": 700
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 65,
+      "batchSize": 2,
+      "powerConsumption": 400
+    },
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 18,
+      "batchSize": 1,
+      "powerConsumption": 450
+    },
+    {
+      "gpuType": "V100",
+      "tokensPerSecond": 12,
+      "batchSize": 1,
+      "powerConsumption": 300
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2024-03-04",
+    "organization": "Anthropic",
+    "license": "Commercial",
+    "tags": ["reasoning", "analysis", "long-context", "safety"],
+    "benchmarks": [
+      {
+        "name": "MMLU",
+        "score": 86.8,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HumanEval",
+        "score": 84.9,
+        "unit": "accuracy"
+      },
+      {
+        "name": "GSM8K",
+        "score": 95.0,
+        "unit": "accuracy"
+      },
+      {
+        "name": "HellaSwag",
+        "score": 95.4,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}

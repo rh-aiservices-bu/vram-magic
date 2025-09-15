@@ -1,0 +1,74 @@
+{
+  "id": "codegen-16b",
+  "name": "CodeGen 16B",
+  "description": "Salesforce's code generation model specialized for programming tasks with multi-turn conversation and code completion capabilities",
+  "parameters": 16000000000,
+  "precision": "fp16",
+  "architecture": {
+    "layers": 34,
+    "hiddenSize": 6144,
+    "attentionHeads": 48,
+    "vocabularySize": 51200,
+    "maxSequenceLength": 2048
+  },
+  "vramRequirements": {
+    "baseVRAM": 32000,
+    "kvCacheCoefficient": 1.2,
+    "activationMultiplier": 1.5,
+    "overheadFactor": 1.15
+  },
+  "performance": [
+    {
+      "gpuType": "H100",
+      "tokensPerSecond": 220,
+      "batchSize": 8,
+      "powerConsumption": 600
+    },
+    {
+      "gpuType": "A100",
+      "tokensPerSecond": 120,
+      "batchSize": 4,
+      "powerConsumption": 380
+    },
+    {
+      "gpuType": "RTX 4090",
+      "tokensPerSecond": 55,
+      "batchSize": 2,
+      "powerConsumption": 380
+    },
+    {
+      "gpuType": "RTX 3090",
+      "tokensPerSecond": 35,
+      "batchSize": 1,
+      "powerConsumption": 350
+    }
+  ],
+  "metadata": {
+    "releaseDate": "2022-03-25",
+    "organization": "Salesforce",
+    "license": "BSD-3-Clause",
+    "tags": ["code-generation", "programming", "open-source", "conversational"],
+    "benchmarks": [
+      {
+        "name": "HumanEval",
+        "score": 29.3,
+        "unit": "accuracy"
+      },
+      {
+        "name": "MBPP",
+        "score": 35.7,
+        "unit": "accuracy"
+      },
+      {
+        "name": "CodeXGLUE",
+        "score": 42.1,
+        "unit": "BLEU"
+      },
+      {
+        "name": "APPS",
+        "score": 12.4,
+        "unit": "accuracy"
+      }
+    ]
+  }
+}
