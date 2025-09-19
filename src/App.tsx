@@ -135,7 +135,7 @@ function AppLayout() {
 
   const handleCalculateClick = useCallback(() => {
     if (selectedModel) {
-      executeSimulation(selectedModel, workloadSlots)
+      executeSimulation(selectedModel, workloadSlots, { clearPrevious: true })
     }
   }, [selectedModel, executeSimulation, workloadSlots])
 

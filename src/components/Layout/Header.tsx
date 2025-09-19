@@ -13,10 +13,10 @@ import {
 import {
   Brightness4 as DarkModeIcon,
   Brightness7 as LightModeIcon,
-  Memory as VRAMIcon,
   GitHub as GitHubIcon,
   Info as InfoIcon,
 } from '@mui/icons-material'
+import VRAMMagic from '../../assets/img/logo.svg'
 import { styled } from '@mui/material/styles'
 
 import { useUIContext } from '../../hooks/useUIContext'
@@ -114,9 +114,10 @@ const Header: React.FC<HeaderProps> = ({ className }) => {
     <StyledAppBar className={className} elevation={0}>
       <StyledToolbar>
         <LogoContainer>
-          <VRAMIcon
+          <VRAMMagic
+            width={isMobile ? 35 : 71}
+            height={isMobile ? 20 : 40}
             sx={{
-              fontSize: isMobile ? 28 : 32,
               color: theme.palette.mode === 'light' ? 'white' : theme.palette.primary.main,
               filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))',
             }}
