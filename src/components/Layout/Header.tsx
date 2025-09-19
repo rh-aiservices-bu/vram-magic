@@ -16,8 +16,8 @@ import {
   GitHub as GitHubIcon,
   Info as InfoIcon,
 } from '@mui/icons-material'
-import VRAMMagic from '../../assets/img/logo.svg'
 import { styled } from '@mui/material/styles'
+import VRAMMagic from '../../assets/img/logo.svg'
 
 import { useUIContext } from '../../hooks/useUIContext'
 
@@ -25,6 +25,8 @@ interface HeaderProps {
   showNavigation?: boolean
   className?: string
 }
+
+const StyledVRAMMagic = styled(VRAMMagic)({})
 
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
   position: 'static',
@@ -114,7 +116,7 @@ const Header: React.FC<HeaderProps> = ({ className }) => {
     <StyledAppBar className={className} elevation={0}>
       <StyledToolbar>
         <LogoContainer>
-          <VRAMMagic
+          <StyledVRAMMagic
             width={isMobile ? 35 : 71}
             height={isMobile ? 20 : 40}
             sx={{

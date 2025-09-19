@@ -29,7 +29,8 @@
       "@/contexts/*": ["contexts/*"],
       "@/data/*": ["data/*"],
       "@/theme/*": ["theme/*"]
-    }
+    },
+    "types": ["vite-plugin-svgr/client"]
   },
   "include": ["src/**/*"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx"],
