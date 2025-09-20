@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useMemo, useCallback, useState, useEffect } from 'react'
+import { createContext, ReactNode, useMemo, useCallback, useState } from 'react'
 import { SimulationPeriod, VRAMUsagePoint, Model, WorkloadSlot } from '../types'
 import type {
   SimulationConfig,

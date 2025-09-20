@@ -1,7 +1,7 @@
 // VRAM Magic: Results Summary Component
 // Displays VRAM calculation results with GPU recommendations and export options
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   Box,
   Card,
@@ -13,6 +13,7 @@ import {
   ButtonGroup,
   Skeleton,
   Alert,
+  AlertTitle,
   Divider,
   List,
   ListItem,
@@ -208,6 +209,7 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
   loading = false,
 }) => {
   const theme = useTheme()
+  const [showDebugInfo, setShowDebugInfo] = useState(false)
 
   const gpuRecommendations = useMemo(() => {
     if (!results) return []
@@ -231,6 +233,22 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
           ? results.usagePoints[results.usagePoints.length - 1].timestamp
           : 0,
     }
+  }, [results])
+
+  // Extract simulation metadata for GQA information
+  const simulationResults = useMemo(() => {
+    if (!results?.usagePoints?.length) return null
+
+    // Find first non-empty usage point with metadata
+    const pointWithMetadata = results.usagePoints.find(point =>
+      point.breakdown &&
+      typeof point.breakdown === 'object' &&
+      'metadata' in point.breakdown
+    )
+
+    if (!pointWithMetadata) return null
+
+    return (pointWithMetadata.breakdown as any).metadata || null
   }, [results])
 
   const handleExport = (format: ExportFormat) => {
@@ -314,22 +332,31 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
             </Typography>
           </Box>
 
-          <ButtonGroup variant="outlined" size="small" aria-label="Export options">
-            <Tooltip title="Export as JSON">
-              <IconButton onClick={() => handleExport('json')} aria-label="Export as JSON">
-                <DownloadIcon />
-              </IconButton>
-            </Tooltip>
-            <Button onClick={() => handleExport('json')} startIcon={<DownloadIcon />}>
-              JSON
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant={showDebugInfo ? 'contained' : 'outlined'}
+              size="small"
+              onClick={() => setShowDebugInfo(!showDebugInfo)}
+            >
+              Debug
             </Button>
-            <Button onClick={() => handleExport('csv')} startIcon={<DownloadIcon />}>
-              CSV
-            </Button>
-            <Button onClick={() => handleExport('png')} startIcon={<ShareIcon />}>
-              PNG
-            </Button>
-          </ButtonGroup>
+            <ButtonGroup variant="outlined" size="small" aria-label="Export options">
+              <Tooltip title="Export as JSON">
+                <IconButton onClick={() => handleExport('json')} aria-label="Export as JSON">
+                  <DownloadIcon />
+                </IconButton>
+              </Tooltip>
+              <Button onClick={() => handleExport('json')} startIcon={<DownloadIcon />}>
+                JSON
+              </Button>
+              <Button onClick={() => handleExport('csv')} startIcon={<DownloadIcon />}>
+                CSV
+              </Button>
+              <Button onClick={() => handleExport('png')} startIcon={<ShareIcon />}>
+                PNG
+              </Button>
+            </ButtonGroup>
+          </Box>
         </Box>
 
         <Grid container spacing={3}>
@@ -359,6 +386,59 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
               </Box>
             </Paper>
           </Grid>
+
+          {/* GQA Optimization Information */}
+          {simulationResults && simulationResults.isGQA && (
+            <Grid item xs={12}>
+              <Alert severity="success" sx={{ mt: 2 }}>
+                <AlertTitle>GQA Optimization Active</AlertTitle>
+                <Typography variant="body2">
+                  This model uses Grouped Query Attention with a {simulationResults.gqaCompressionRatio?.toFixed(1)}x
+                  compression ratio on KV-cache memory. This significantly reduces VRAM requirements compared to standard attention.
+                </Typography>
+                <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                  KV Heads: {simulationResults.kvHeads} |
+                  Attention Heads: {simulationResults.attentionHeads}
+                </Typography>
+              </Alert>
+            </Grid>
+          )}
+
+          {/* Debug Information */}
+          {showDebugInfo && simulationResults && (
+            <Grid item xs={12}>
+              <Paper sx={{ p: 2, mt: 2, bgcolor: 'grey.50' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Debug Information</Typography>
+                  <Button size="small" onClick={() => setShowDebugInfo(false)}>Hide</Button>
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" display="block">
+                      Effective Tokens: {simulationResults.effectiveTokens}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      Actual Tokens: {simulationResults.actualTokens}
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      Block Size: {model?.vllmOptimizations?.blockSize || 16} tokens
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" display="block">
+                      Memory Pool Overhead: {((model?.vllmOptimizations?.memoryPoolOverhead || 0.15) * 100).toFixed(0)}%
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      Activation Multiplier: 1.5x (inference)
+                    </Typography>
+                    <Typography variant="caption" display="block">
+                      Precision: {simulationResults.precision}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
+          )}
 
           {/* Summary Statistics */}
           {summaryStats && (

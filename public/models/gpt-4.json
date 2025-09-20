@@ -7,9 +7,12 @@
   "architecture": {
     "layers": 120,
     "hiddenSize": 12288,
-    "attentionHeads": 96,
+    "attentionHeads": 128,
     "vocabularySize": 50257,
-    "maxSequenceLength": 8192
+    "maxSequenceLength": 8192,
+    "kvHeads": 96,
+    "useGQA": true,
+    "headDim": 96
   },
   "vramRequirements": {
     "baseVRAM": 3400000,
@@ -22,32 +25,105 @@
       "gpuType": "H100",
       "tokensPerSecond": 150,
       "batchSize": 8,
-      "powerConsumption": 700
+      "powerConsumption": 700,
+      "baseTokensPerSecond": 150,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A100",
       "tokensPerSecond": 85,
       "batchSize": 4,
-      "powerConsumption": 400
+      "powerConsumption": 400,
+      "baseTokensPerSecond": 85,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 4090",
       "tokensPerSecond": 25,
       "batchSize": 1,
-      "powerConsumption": 450
+      "powerConsumption": 450,
+      "baseTokensPerSecond": 25,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "V100",
       "tokensPerSecond": 15,
       "batchSize": 1,
-      "powerConsumption": 300
+      "powerConsumption": 300,
+      "baseTokensPerSecond": 15,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2023-03-14",
     "organization": "OpenAI",
     "license": "Commercial",
-    "tags": ["reasoning", "multimodal", "commercial", "advanced"],
+    "tags": [
+      "reasoning",
+      "multimodal",
+      "commercial",
+      "advanced"
+    ],
     "benchmarks": [
       {
         "name": "MMLU",
@@ -56,12 +132,12 @@
       },
       {
         "name": "HumanEval",
-        "score": 67.0,
+        "score": 67,
         "unit": "accuracy"
       },
       {
         "name": "GSM8K",
-        "score": 92.0,
+        "score": 92,
         "unit": "accuracy"
       },
       {
@@ -70,5 +146,13 @@
         "unit": "accuracy"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": false,
+    "flashAttentionCompatible": true
   }
 }

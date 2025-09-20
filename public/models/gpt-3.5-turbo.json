@@ -9,7 +9,10 @@
     "hiddenSize": 12288,
     "attentionHeads": 96,
     "vocabularySize": 50400,
-    "maxSequenceLength": 4096
+    "maxSequenceLength": 4096,
+    "kvHeads": 96,
+    "useGQA": false,
+    "headDim": 128
   },
   "vramRequirements": {
     "baseVRAM": 38500,
@@ -22,36 +25,110 @@
       "gpuType": "A100",
       "tokensPerSecond": 95,
       "batchSize": 8,
-      "powerConsumption": 420
+      "powerConsumption": 420,
+      "baseTokensPerSecond": 95,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "H100",
       "tokensPerSecond": 150,
       "batchSize": 16,
-      "powerConsumption": 500
+      "powerConsumption": 500,
+      "baseTokensPerSecond": 150,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 4090",
       "tokensPerSecond": 25,
       "batchSize": 1,
-      "powerConsumption": 380
+      "powerConsumption": 380,
+      "baseTokensPerSecond": 25,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A6000",
       "tokensPerSecond": 35,
       "batchSize": 2,
-      "powerConsumption": 300
+      "powerConsumption": 300,
+      "baseTokensPerSecond": 35,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2023-03-01",
     "organization": "OpenAI",
     "license": "Commercial",
-    "tags": ["chat", "completion", "commercial", "api", "general-purpose"],
+    "tags": [
+      "chat",
+      "completion",
+      "commercial",
+      "api",
+      "general-purpose"
+    ],
     "benchmarks": [
       {
         "name": "MMLU",
-        "score": 70.0,
+        "score": 70,
         "unit": "accuracy"
       },
       {
@@ -71,9 +148,17 @@
       },
       {
         "name": "TruthfulQA",
-        "score": 47.0,
+        "score": 47,
         "unit": "accuracy"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": false,
+    "flashAttentionCompatible": true
   }
 }

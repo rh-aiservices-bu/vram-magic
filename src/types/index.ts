@@ -16,8 +16,20 @@ export interface ModelArchitecture {
   layers: number
   hiddenSize: number
   attentionHeads: number
+  kvHeads?: number  // NEW: Number of KV heads (different from attention heads for GQA)
+  headDim?: number  // NEW: Dimension per attention head
+  useGQA?: boolean  // NEW: Flag indicating if model uses Grouped Query Attention
   vocabularySize: number
   maxSequenceLength: number
+}
+
+export interface VLLMOptimizations {
+  blockSize: number           // KV-cache block size in tokens (typically 16)
+  memoryPoolOverhead: number  // Pre-allocation overhead (typically 0.15)
+  continuousBatching: boolean // Supports continuous batching
+  pagedAttention: boolean     // Uses PagedAttention
+  cudaGraphSupported: boolean // CUDA graph optimization support
+  flashAttentionCompatible: boolean // Flash Attention compatibility
 }
 
 export interface VRAMRequirements {
@@ -29,7 +41,18 @@ export interface VRAMRequirements {
 
 export interface PerformanceMetrics {
   gpuType: string
-  tokensPerSecond: number
+  baseTokensPerSecond?: number      // NEW: Rename from tokensPerSecond
+  tokensPerSecond?: number          // Keep for backward compatibility
+  workloadMultipliers?: {            // NEW: Workload-specific performance
+    chat?: number
+    code?: number
+    rag?: number
+    summarization?: number
+    translation?: number
+  }
+  batchScaling?: {                   // NEW: Batch size performance scaling
+    [key: string]: number            // e.g., "1": 0.4, "4": 0.85, "8": 1.0
+  }
   batchSize: number
   powerConsumption: number
 }
@@ -56,6 +79,7 @@ export interface Model {
   precision: ModelPrecision
   architecture: ModelArchitecture
   vramRequirements: VRAMRequirements
+  vllmOptimizations?: VLLMOptimizations  // NEW
   performance: PerformanceMetrics[]
   metadata: ModelMetadata
 }

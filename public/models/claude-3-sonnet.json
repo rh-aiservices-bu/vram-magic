@@ -7,14 +7,17 @@
   "architecture": {
     "layers": 80,
     "hiddenSize": 16384,
-    "attentionHeads": 128,
+    "attentionHeads": 64,
     "vocabularySize": 100000,
-    "maxSequenceLength": 200000
+    "maxSequenceLength": 200000,
+    "kvHeads": 64,
+    "useGQA": true,
+    "headDim": 256
   },
   "vramRequirements": {
     "baseVRAM": 175000,
     "kvCacheCoefficient": 1.4,
-    "activationMultiplier": 2.0,
+    "activationMultiplier": 2,
     "overheadFactor": 1.25
   },
   "performance": [
@@ -22,41 +25,116 @@
       "gpuType": "H100",
       "tokensPerSecond": 120,
       "batchSize": 4,
-      "powerConsumption": 650
+      "powerConsumption": 650,
+      "baseTokensPerSecond": 120,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A100",
       "tokensPerSecond": 55,
       "batchSize": 2,
-      "powerConsumption": 450
+      "powerConsumption": 450,
+      "baseTokensPerSecond": 55,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "H100 SXM",
       "tokensPerSecond": 180,
       "batchSize": 8,
-      "powerConsumption": 700
+      "powerConsumption": 700,
+      "baseTokensPerSecond": 180,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "MI300X",
       "tokensPerSecond": 95,
       "batchSize": 4,
-      "powerConsumption": 550
+      "powerConsumption": 550,
+      "baseTokensPerSecond": 95,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2024-03-04",
     "organization": "Anthropic",
     "license": "Commercial",
-    "tags": ["reasoning", "analysis", "writing", "coding", "multimodal", "constitutional-ai"],
+    "tags": [
+      "reasoning",
+      "analysis",
+      "writing",
+      "coding",
+      "multimodal",
+      "constitutional-ai"
+    ],
     "benchmarks": [
       {
         "name": "MMLU",
-        "score": 79.0,
+        "score": 79,
         "unit": "accuracy"
       },
       {
         "name": "HumanEval",
-        "score": 73.0,
+        "score": 73,
         "unit": "accuracy"
       },
       {
@@ -71,7 +149,7 @@
       },
       {
         "name": "BIG-Bench-Hard",
-        "score": 69.0,
+        "score": 69,
         "unit": "accuracy"
       },
       {
@@ -80,5 +158,13 @@
         "unit": "f1-score"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": false,
+    "flashAttentionCompatible": true
   }
 }

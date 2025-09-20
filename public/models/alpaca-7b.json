@@ -9,7 +9,10 @@
     "hiddenSize": 4096,
     "attentionHeads": 32,
     "vocabularySize": 32000,
-    "maxSequenceLength": 2048
+    "maxSequenceLength": 2048,
+    "kvHeads": 32,
+    "useGQA": false,
+    "headDim": 128
   },
   "vramRequirements": {
     "baseVRAM": 14000,
@@ -22,32 +25,105 @@
       "gpuType": "H100",
       "tokensPerSecond": 280,
       "batchSize": 16,
-      "powerConsumption": 520
+      "powerConsumption": 520,
+      "baseTokensPerSecond": 280,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A100",
       "tokensPerSecond": 155,
       "batchSize": 8,
-      "powerConsumption": 360
+      "powerConsumption": 360,
+      "baseTokensPerSecond": 155,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 4090",
       "tokensPerSecond": 78,
       "batchSize": 4,
-      "powerConsumption": 330
+      "powerConsumption": 330,
+      "baseTokensPerSecond": 78,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 3090",
       "tokensPerSecond": 52,
       "batchSize": 2,
-      "powerConsumption": 310
+      "powerConsumption": 310,
+      "baseTokensPerSecond": 52,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2023-03-13",
     "organization": "Stanford University",
     "license": "Non-commercial",
-    "tags": ["instruction-following", "fine-tuned", "research", "academic"],
+    "tags": [
+      "instruction-following",
+      "fine-tuned",
+      "research",
+      "academic"
+    ],
     "benchmarks": [
       {
         "name": "MMLU",
@@ -70,5 +146,13 @@
         "unit": "accuracy"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": true,
+    "flashAttentionCompatible": true
   }
 }

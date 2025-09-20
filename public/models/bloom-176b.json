@@ -9,7 +9,10 @@
     "hiddenSize": 14336,
     "attentionHeads": 112,
     "vocabularySize": 250680,
-    "maxSequenceLength": 2048
+    "maxSequenceLength": 2048,
+    "kvHeads": 112,
+    "useGQA": false,
+    "headDim": 128
   },
   "vramRequirements": {
     "baseVRAM": 352000,
@@ -22,32 +25,105 @@
       "gpuType": "H100",
       "tokensPerSecond": 90,
       "batchSize": 4,
-      "powerConsumption": 700
+      "powerConsumption": 700,
+      "baseTokensPerSecond": 90,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A100",
       "tokensPerSecond": 45,
       "batchSize": 2,
-      "powerConsumption": 400
+      "powerConsumption": 400,
+      "baseTokensPerSecond": 45,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 4090",
       "tokensPerSecond": 12,
       "batchSize": 1,
-      "powerConsumption": 450
+      "powerConsumption": 450,
+      "baseTokensPerSecond": 12,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "V100",
       "tokensPerSecond": 8,
       "batchSize": 1,
-      "powerConsumption": 300
+      "powerConsumption": 300,
+      "baseTokensPerSecond": 8,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2022-07-06",
     "organization": "BigScience",
     "license": "RAIL License",
-    "tags": ["multilingual", "open-science", "research", "collaborative"],
+    "tags": [
+      "multilingual",
+      "open-science",
+      "research",
+      "collaborative"
+    ],
     "benchmarks": [
       {
         "name": "MMLU",
@@ -66,9 +142,17 @@
       },
       {
         "name": "HellaSwag",
-        "score": 73.0,
+        "score": 73,
         "unit": "accuracy"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": false,
+    "flashAttentionCompatible": true
   }
 }

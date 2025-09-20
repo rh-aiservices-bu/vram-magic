@@ -7,9 +7,12 @@
   "architecture": {
     "layers": 34,
     "hiddenSize": 6144,
-    "attentionHeads": 48,
+    "attentionHeads": 24,
     "vocabularySize": 51200,
-    "maxSequenceLength": 2048
+    "maxSequenceLength": 2048,
+    "kvHeads": 24,
+    "useGQA": false,
+    "headDim": 256
   },
   "vramRequirements": {
     "baseVRAM": 32000,
@@ -22,32 +25,105 @@
       "gpuType": "H100",
       "tokensPerSecond": 220,
       "batchSize": 8,
-      "powerConsumption": 600
+      "powerConsumption": 600,
+      "baseTokensPerSecond": 220,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A100",
       "tokensPerSecond": 120,
       "batchSize": 4,
-      "powerConsumption": 380
+      "powerConsumption": 380,
+      "baseTokensPerSecond": 120,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 4090",
       "tokensPerSecond": 55,
       "batchSize": 2,
-      "powerConsumption": 380
+      "powerConsumption": 380,
+      "baseTokensPerSecond": 55,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 3090",
       "tokensPerSecond": 35,
       "batchSize": 1,
-      "powerConsumption": 350
+      "powerConsumption": 350,
+      "baseTokensPerSecond": 35,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2022-03-25",
     "organization": "Salesforce",
     "license": "BSD-3-Clause",
-    "tags": ["code-generation", "programming", "open-source", "conversational"],
+    "tags": [
+      "code-generation",
+      "programming",
+      "open-source",
+      "conversational"
+    ],
     "benchmarks": [
       {
         "name": "HumanEval",
@@ -70,5 +146,13 @@
         "unit": "accuracy"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": true,
+    "flashAttentionCompatible": true
   }
 }

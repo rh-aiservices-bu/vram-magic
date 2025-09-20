@@ -9,7 +9,10 @@
     "hiddenSize": 4096,
     "attentionHeads": 32,
     "vocabularySize": 32000,
-    "maxSequenceLength": 32768
+    "maxSequenceLength": 32768,
+    "kvHeads": 8,
+    "useGQA": true,
+    "headDim": 128
   },
   "vramRequirements": {
     "baseVRAM": 14000,
@@ -22,32 +25,105 @@
       "gpuType": "H100",
       "tokensPerSecond": 320,
       "batchSize": 16,
-      "powerConsumption": 500
+      "powerConsumption": 500,
+      "baseTokensPerSecond": 320,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A100",
       "tokensPerSecond": 180,
       "batchSize": 8,
-      "powerConsumption": 350
+      "powerConsumption": 350,
+      "baseTokensPerSecond": 180,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 4090",
       "tokensPerSecond": 95,
       "batchSize": 4,
-      "powerConsumption": 320
+      "powerConsumption": 320,
+      "baseTokensPerSecond": 95,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 3090",
       "tokensPerSecond": 65,
       "batchSize": 2,
-      "powerConsumption": 300
+      "powerConsumption": 300,
+      "baseTokensPerSecond": 65,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2023-09-27",
     "organization": "Mistral AI",
     "license": "Apache 2.0",
-    "tags": ["efficient", "open-source", "instruct", "commercial"],
+    "tags": [
+      "efficient",
+      "open-source",
+      "instruct",
+      "commercial"
+    ],
     "benchmarks": [
       {
         "name": "MMLU",
@@ -70,5 +146,13 @@
         "unit": "accuracy"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": true,
+    "flashAttentionCompatible": true
   }
 }

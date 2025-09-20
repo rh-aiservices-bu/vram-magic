@@ -9,7 +9,10 @@
     "hiddenSize": 4096,
     "attentionHeads": 32,
     "vocabularySize": 32000,
-    "maxSequenceLength": 4096
+    "maxSequenceLength": 4096,
+    "kvHeads": 32,
+    "useGQA": false,
+    "headDim": 128
   },
   "vramRequirements": {
     "baseVRAM": 13500,
@@ -22,32 +25,105 @@
       "gpuType": "RTX 4090",
       "tokensPerSecond": 45,
       "batchSize": 1,
-      "powerConsumption": 350
+      "powerConsumption": 350,
+      "baseTokensPerSecond": 45,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "A100",
       "tokensPerSecond": 80,
       "batchSize": 4,
-      "powerConsumption": 400
+      "powerConsumption": 400,
+      "baseTokensPerSecond": 80,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "RTX 3090",
       "tokensPerSecond": 32,
       "batchSize": 1,
-      "powerConsumption": 320
+      "powerConsumption": 320,
+      "baseTokensPerSecond": 32,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     },
     {
       "gpuType": "V100",
       "tokensPerSecond": 28,
       "batchSize": 2,
-      "powerConsumption": 300
+      "powerConsumption": 300,
+      "baseTokensPerSecond": 28,
+      "workloadMultipliers": {
+        "chat": 1,
+        "code": 0.85,
+        "rag": 0.7,
+        "summarization": 0.8,
+        "translation": 0.9
+      },
+      "batchScaling": {
+        "1": 0.4,
+        "2": 0.6,
+        "4": 0.85,
+        "8": 1,
+        "16": 1.15,
+        "32": 1.25,
+        "64": 1.3
+      }
     }
   ],
   "metadata": {
     "releaseDate": "2023-07-18",
     "organization": "Meta",
     "license": "Llama 2 Community License",
-    "tags": ["chat", "assistant", "open-source", "instruction-following"],
+    "tags": [
+      "chat",
+      "assistant",
+      "open-source",
+      "instruction-following"
+    ],
     "benchmarks": [
       {
         "name": "MMLU",
@@ -70,5 +146,13 @@
         "unit": "accuracy"
       }
     ]
+  },
+  "vllmOptimizations": {
+    "blockSize": 16,
+    "memoryPoolOverhead": 0.15,
+    "continuousBatching": true,
+    "pagedAttention": true,
+    "cudaGraphSupported": true,
+    "flashAttentionCompatible": true
   }
 }

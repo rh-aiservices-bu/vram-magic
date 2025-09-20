@@ -30,8 +30,8 @@ export function calculateBaseMemory(model: Model, precision: ModelPrecision): nu
 }
 
 /**
- * Calculate KV-Cache memory requirements
- * Formula: 2 × Layers × Hidden_Size × Seq_Len × Batch × Precision
+ * Calculate KV-Cache memory requirements with GQA support
+ * Formula: 2 × Layers × KV_Heads × Head_Dim × Seq_Len × Batch × Precision
  * @param model - Model configuration
  * @param sequenceLength - Input sequence length
  * @param batchSize - Batch size
@@ -45,19 +45,34 @@ export function calculateKVCache(
   precision: ModelPrecision
 ): number {
   const precisionBytes = PRECISION_BYTES[precision]
+
+  // CRITICAL FIX: Use kvHeads if available (for GQA), otherwise use attentionHeads
+  const numKVHeads = model.architecture.kvHeads || model.architecture.attentionHeads
+  const headDim = model.architecture.headDim ||
+    Math.floor(model.architecture.hiddenSize / model.architecture.attentionHeads)
+
+  // vLLM block allocation (round up to 16-token blocks)
+  const blockSize = model.vllmOptimizations?.blockSize || 16
+  const blocksNeeded = Math.ceil(sequenceLength / blockSize)
+  const effectiveSequenceLength = blocksNeeded * blockSize
+
   const kvCache =
-    2 *
+    2 *                      // Keys and Values
     model.architecture.layers *
-    model.architecture.hiddenSize *
-    sequenceLength *
+    numKVHeads *            // Use KV heads, not attention heads!
+    headDim *               // Head dimension
+    effectiveSequenceLength * // Rounded to block size
     batchSize *
     precisionBytes
-  return Math.ceil(kvCache)
+
+  // Add vLLM memory pool overhead if configured
+  const overhead = model.vllmOptimizations?.memoryPoolOverhead || 0
+  return Math.ceil(kvCache * (1 + overhead))
 }
 
 /**
- * Calculate activation memory requirements
- * Formula: Hidden_Size × Seq_Len × Batch × Precision × 4
+ * Calculate activation memory requirements for inference
+ * Formula: Hidden_Size × Seq_Len × Batch × Precision × 1.5 (inference multiplier)
  * @param model - Model configuration
  * @param sequenceLength - Input sequence length
  * @param batchSize - Batch size
@@ -71,8 +86,17 @@ export function calculateActivations(
   precision: ModelPrecision
 ): number {
   const precisionBytes = PRECISION_BYTES[precision]
+
+  // FIX: Use 1.5x multiplier for inference, not 4x for training
+  const inferenceMultiplier = 1.5
+
   const activations =
-    model.architecture.hiddenSize * sequenceLength * batchSize * precisionBytes * 4
+    model.architecture.hiddenSize *
+    sequenceLength *
+    batchSize *
+    precisionBytes *
+    inferenceMultiplier
+
   return Math.ceil(activations)
 }
 
@@ -238,11 +262,27 @@ export function generateRequestTimestamps(
       }
 
       case RequestPattern.BELL_CURVE: {
-        // Normal distribution centered around middle
-        const normalRatio = i / totalRequests
-        const bellFactor = Math.sin(normalRatio * Math.PI)
-        timestamp = bellFactor * durationSeconds
-        break
+        // Use Box-Muller transform for proper normal distribution
+        // This creates a real bell curve, not a sine wave!
+
+        // Generate two uniform random variables
+        const u1 = Math.random() || 0.01; // Avoid log(0)
+        const u2 = Math.random();
+
+        // Box-Muller transform
+        const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+
+        // Scale and shift to fit our time window
+        // Mean at center, 99.7% within 3 standard deviations
+        const mean = durationSeconds / 2;
+        const stdDev = durationSeconds / 6; // 6 sigma covers full duration
+
+        // Calculate timestamp
+        let normalizedTime = mean + z0 * stdDev;
+
+        // Clamp to valid range
+        timestamp = Math.max(0, Math.min(durationSeconds - 1, normalizedTime));
+        break;
       }
 
       case RequestPattern.STEADY: {
