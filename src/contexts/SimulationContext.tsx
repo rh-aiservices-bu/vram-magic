@@ -180,11 +180,15 @@ function SimulationProvider({ children }: SimulationProviderProps) {
     (format: 'json' | 'csv'): string | null => {
       if (!results) return null
 
-      if (format === 'json') {
-        return JSON.stringify(results, null, 2)
-      }
+      let data: string
+      let mimeType: string
+      let filename: string
 
-      if (format === 'csv') {
+      if (format === 'json') {
+        data = JSON.stringify(results, null, 2)
+        mimeType = 'application/json'
+        filename = `vram-analysis-${Date.now()}.json`
+      } else if (format === 'csv') {
         const headers = [
           'Timestamp',
           'Total VRAM (MB)',
@@ -200,10 +204,25 @@ function SimulationProvider({ children }: SimulationProviderProps) {
           point.breakdown.activations.toString(),
         ])
 
-        return [headers, ...rows].map(row => row.join(',')).join('\n')
+        data = [headers, ...rows].map(row => row.join(',')).join('\n')
+        mimeType = 'text/csv'
+        filename = `vram-analysis-${Date.now()}.csv`
+      } else {
+        return null
       }
 
-      return null
+      // Create and trigger download
+      const blob = new Blob([data], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      return data
     },
     [results]
   )

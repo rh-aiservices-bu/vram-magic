@@ -34,3 +34,6 @@ coverage
 .env.production.local
 *storybook.log
 storybook-static
+
+# Playwright
+.playwright-mcp
