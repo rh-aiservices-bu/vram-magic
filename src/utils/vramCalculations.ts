@@ -9,33 +9,113 @@
  * - vLLM memory pool pre-allocation
  */
 
-import { ModelPrecision } from '../types';
+import { Model, Workload } from '../types';
 import { PRECISION_BYTES } from '../constants';
 
 // Fallback for PRECISION_BYTES in case import fails
-const FALLBACK_PRECISION_BYTES = {
+const FALLBACK_PRECISION_BYTES: Record<string, number> = {
   fp32: 4,
   fp16: 2,
   int8: 1,
   int4: 0.5
 };
 
+interface KVCacheBreakdown {
+  rawKVCache: number;
+  poolOverhead: number;
+  blocksUsed: number;
+  effectiveTokens: number;
+  actualTokens: number;
+  isGQA: boolean;
+  gqaCompressionRatio: number;
+  kvHeads: number;
+  attentionHeads: number;
+}
+
+interface KVCacheResult {
+  bytes: number;
+  breakdown: KVCacheBreakdown;
+}
+
+interface ActivationBreakdown {
+  perLayer: number;
+  multiplierUsed: number;
+  inferenceOptimized: boolean;
+}
+
+interface ActivationResult {
+  bytes: number;
+  breakdown: ActivationBreakdown;
+}
+
+interface VRAMBreakdown {
+  baseModelGB: number;
+  kvCacheGB: number;
+  activationsGB: number;
+  overheadGB: number;
+}
+
+interface VRAMDetails {
+  kvCache: KVCacheBreakdown;
+  activations: ActivationBreakdown;
+}
+
+interface VRAMMetadata {
+  isGQA: boolean;
+  gqaCompressionRatio: number;
+  blocksUsed: number;
+  effectiveTokens: number;
+  actualTokens: number;
+  precision: string;
+  concurrentUsers: number;
+  sequenceLength: number;
+}
+
+interface VRAMCalculationResult {
+  totalGB: number;
+  totalBytes: number;
+  breakdown: VRAMBreakdown;
+  details: VRAMDetails;
+  metadata: VRAMMetadata;
+}
+
+interface ComparisonMethod {
+  kvCacheGB: number;
+  activationsGB: number;
+  totalGB: number;
+}
+
+interface ComparisonImprovement {
+  percentReduction: number;
+  gbSaved: number;
+  accuracyGain: string;
+}
+
+interface ComparisonResult {
+  oldMethod: ComparisonMethod;
+  newMethod: ComparisonMethod;
+  improvement: ComparisonImprovement;
+}
+
 /**
  * Calculate KV-cache memory for vLLM with PagedAttention
  * Accounts for GQA and block-based allocation
- *
- * @param {Object} model - Model configuration
- * @param {number} sequenceLength - Total sequence length (input + output)
- * @param {number} batchSize - Number of concurrent requests
- * @param {number} precisionBytes - Bytes per parameter (2 for FP16, 1 for INT8)
- * @returns {Object} KV-cache memory details
  */
-export function calculateKVCacheVLLM(model, sequenceLength, batchSize, precisionBytes) {
+export function calculateKVCacheVLLM(
+  model: Model,
+  sequenceLength: number,
+  batchSize: number,
+  precisionBytes: number
+): KVCacheResult {
   // Extract architecture details
   const arch = model.architecture;
   const vllm = model.vllmOptimizations || {
     blockSize: 16,
-    memoryPoolOverhead: 0.15
+    memoryPoolOverhead: 0.15,
+    continuousBatching: true,
+    pagedAttention: true,
+    cudaGraphSupported: false,
+    flashAttentionCompatible: true
   };
 
   // CRITICAL: Use kvHeads if available (for GQA), otherwise fall back to attentionHeads
@@ -83,14 +163,13 @@ export function calculateKVCacheVLLM(model, sequenceLength, batchSize, precision
 /**
  * Calculate activation memory for vLLM inference
  * Uses realistic 1.5x multiplier instead of training-based 4x
- *
- * @param {Object} model - Model configuration
- * @param {number} sequenceLength - Total sequence length
- * @param {number} batchSize - Number of concurrent requests
- * @param {number} precisionBytes - Bytes per parameter
- * @returns {Object} Activation memory details
  */
-export function calculateActivationsVLLM(model, sequenceLength, batchSize, precisionBytes) {
+export function calculateActivationsVLLM(
+  model: Model,
+  sequenceLength: number,
+  batchSize: number,
+  precisionBytes: number
+): ActivationResult {
   const arch = model.architecture;
 
   // vLLM reuses activation memory efficiently during inference
@@ -117,15 +196,15 @@ export function calculateActivationsVLLM(model, sequenceLength, batchSize, preci
 /**
  * Main VRAM calculation function for vLLM deployments
  * Combines all memory components with vLLM-specific optimizations
- *
- * @param {Object} model - Model configuration
- * @param {Object} workload - Workload configuration with input/output tokens
- * @param {number} concurrentUsers - Number of concurrent users
- * @param {string} precision - Precision mode (fp16, int8, etc.)
- * @returns {Object} Complete VRAM breakdown
  */
-export function calculateTotalVRAMvLLM(model, workload, concurrentUsers, precision = 'fp16') {
-  const precisionBytes = (PRECISION_BYTES && PRECISION_BYTES[precision]) || FALLBACK_PRECISION_BYTES[precision] || 2;
+export function calculateTotalVRAMvLLM(
+  model: Model,
+  workload: Workload,
+  concurrentUsers: number,
+  precision: string = 'fp16'
+): VRAMCalculationResult {
+  const precisionBytes = (PRECISION_BYTES && PRECISION_BYTES[precision as keyof typeof PRECISION_BYTES]) ||
+                        FALLBACK_PRECISION_BYTES[precision] || 2;
 
   // 1. Base model memory (weights)
   const baseModelBytes = model.parameters * precisionBytes *
@@ -188,15 +267,15 @@ export function calculateTotalVRAMvLLM(model, workload, concurrentUsers, precisi
 /**
  * Compare old vs new calculation methods to show improvements
  * Useful for validation and demonstrating the impact of fixes
- *
- * @param {Object} model - Model configuration
- * @param {Object} workload - Workload configuration
- * @param {number} concurrentUsers - Number of concurrent users
- * @param {string} precision - Precision mode
- * @returns {Object} Comparison results
  */
-export function compareCalculationMethods(model, workload, concurrentUsers, precision = 'fp16') {
-  const precisionBytes = (PRECISION_BYTES && PRECISION_BYTES[precision]) || FALLBACK_PRECISION_BYTES[precision] || 2;
+export function compareCalculationMethods(
+  model: Model,
+  workload: Workload,
+  concurrentUsers: number,
+  precision: string = 'fp16'
+): ComparisonResult {
+  const precisionBytes = (PRECISION_BYTES && PRECISION_BYTES[precision as keyof typeof PRECISION_BYTES]) ||
+                        FALLBACK_PRECISION_BYTES[precision] || 2;
   const sequenceLength = Math.min(
     workload.inputTokens + workload.outputTokens,
     model.architecture.maxSequenceLength

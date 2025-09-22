@@ -9,21 +9,53 @@
  * - Prefill vs generation phases
  */
 
-import { ModelPrecision } from '../types';
+import { Model, Workload, PerformanceMetrics } from '../types';
+
+interface SpeedBreakdown {
+  base: number;
+  workloadMultiplier: number;
+  batchEfficiency: number;
+  precisionMultiplier: number;
+  final: number;
+}
+
+interface GenerationSpeedResult {
+  tokensPerSecond: number;
+  breakdown: SpeedBreakdown;
+}
+
+interface DurationBreakdown {
+  prefillTime: number;
+  generationTime: number;
+  timeToFirstToken: number;
+  tokensPerSecond: number;
+  prefillTokensPerSecond: number;
+}
+
+interface RequestDurationResult {
+  totalSeconds: number;
+  breakdown: DurationBreakdown;
+}
+
+interface ThroughputResult {
+  requestsPerSecond: number;
+  avgDurationSeconds: number;
+  tokensPerSecond: number;
+  utilizationPercent: number;
+}
 
 /**
  * Calculate realistic generation speed based on model, GPU, and workload
- *
- * @param {Object} model - Model configuration
- * @param {string} gpuType - Type of GPU (e.g., 'A100', 'RTX 4090')
- * @param {string} workloadType - Type of workload (chat, code, rag, etc.)
- * @param {number} batchSize - Current batch size
- * @param {string} precision - Precision mode
- * @returns {Object} Generation speed details
  */
-export function getGenerationSpeed(model, gpuType, workloadType, batchSize, precision = 'fp16') {
+export function getGenerationSpeed(
+  model: Model,
+  gpuType: string,
+  workloadType: string,
+  batchSize: number,
+  precision: string = 'fp16'
+): GenerationSpeedResult {
   // Find GPU performance data for this model
-  const gpuPerf = model.performance.find(p => p.gpuType === gpuType);
+  const gpuPerf = model.performance.find((p: PerformanceMetrics) => p.gpuType === gpuType);
 
   if (!gpuPerf) {
     console.warn(`No performance data for ${model.name} on ${gpuType}, using defaults`);
@@ -52,7 +84,7 @@ export function getGenerationSpeed(model, gpuType, workloadType, batchSize, prec
     creative: 0.75,
     analysis: 0.80
   };
-  const workloadMultiplier = workloadMultipliers[workloadType] || 1.0;
+  const workloadMultiplier = workloadMultipliers[workloadType as keyof typeof workloadMultipliers] || 1.0;
 
   // Calculate batch size efficiency (non-linear scaling)
   let batchEfficiency = 1.0;
@@ -64,10 +96,10 @@ export function getGenerationSpeed(model, gpuType, workloadType, batchSize, prec
 
     if (batchSize <= batchSizes[0]) {
       // Below minimum, use minimum efficiency
-      batchEfficiency = gpuPerf.batchScaling[batchSizes[0]];
+      batchEfficiency = gpuPerf.batchScaling[batchSizes[0].toString()];
     } else if (batchSize >= batchSizes[batchSizes.length - 1]) {
       // Above maximum, use maximum efficiency
-      batchEfficiency = gpuPerf.batchScaling[batchSizes[batchSizes.length - 1]];
+      batchEfficiency = gpuPerf.batchScaling[batchSizes[batchSizes.length - 1].toString()];
     } else {
       // Interpolate between two closest values
       for (let i = 0; i < batchSizes.length - 1; i++) {
@@ -75,8 +107,8 @@ export function getGenerationSpeed(model, gpuType, workloadType, batchSize, prec
           const lower = batchSizes[i];
           const upper = batchSizes[i + 1];
           const ratio = (batchSize - lower) / (upper - lower);
-          const lowerEff = gpuPerf.batchScaling[lower];
-          const upperEff = gpuPerf.batchScaling[upper];
+          const lowerEff = gpuPerf.batchScaling[lower.toString()];
+          const upperEff = gpuPerf.batchScaling[upper.toString()];
           batchEfficiency = lowerEff + (upperEff - lowerEff) * ratio;
           break;
         }
@@ -92,7 +124,7 @@ export function getGenerationSpeed(model, gpuType, workloadType, batchSize, prec
   }
 
   // Precision adjustment
-  const precisionMultipliers = {
+  const precisionMultipliers: Record<string, number> = {
     'fp32': 0.7,   // Slowest
     'fp16': 1.0,   // Baseline
     'int8': 1.4,   // Faster with quantization
@@ -117,15 +149,14 @@ export function getGenerationSpeed(model, gpuType, workloadType, batchSize, prec
 
 /**
  * Calculate request processing duration with vLLM's prefill/generation phases
- *
- * @param {Object} model - Model configuration
- * @param {string} gpuType - GPU type
- * @param {Object} workload - Workload with input/output tokens
- * @param {number} batchSize - Current batch size
- * @param {string} precision - Precision mode
- * @returns {Object} Duration breakdown
  */
-export function calculateRequestDuration(model, gpuType, workload, batchSize, precision = 'fp16') {
+export function calculateRequestDuration(
+  model: Model,
+  gpuType: string,
+  workload: Workload,
+  batchSize: number,
+  precision: string = 'fp16'
+): RequestDurationResult {
   const speed = getGenerationSpeed(
     model,
     gpuType,
@@ -163,15 +194,14 @@ export function calculateRequestDuration(model, gpuType, workload, batchSize, pr
 
 /**
  * Estimate throughput for continuous batching in vLLM
- *
- * @param {Object} model - Model configuration
- * @param {string} gpuType - GPU type
- * @param {Object} workloadMix - Mix of different workload types
- * @param {number} targetBatchSize - Target batch size
- * @param {string} precision - Precision mode
- * @returns {Object} Throughput metrics
  */
-export function estimateThroughput(model, gpuType, workloadMix, targetBatchSize, precision = 'fp16') {
+export function estimateThroughput(
+  model: Model,
+  gpuType: string,
+  workloadMix: Record<string, number>,
+  targetBatchSize: number,
+  precision: string = 'fp16'
+): ThroughputResult {
   let totalRequestsPerSecond = 0;
   let weightedDuration = 0;
   let totalWeight = 0;
@@ -179,16 +209,24 @@ export function estimateThroughput(model, gpuType, workloadMix, targetBatchSize,
   // Calculate weighted average across workload mix
   for (const [workloadType, weight] of Object.entries(workloadMix)) {
     if (weight > 0) {
-      const speed = getGenerationSpeed(model, gpuType, workloadType, targetBatchSize, precision);
+      getGenerationSpeed(model, gpuType, workloadType, targetBatchSize, precision);
 
       // Estimate average request duration for this workload type
       const avgInputTokens = workloadType === 'rag' ? 2000 : 500;
-      const avgOutputTokens = workloadType === 'code' ? 500 : 200;
+      const avgOutputTokens = workloadType === 'coding' ? 500 : 200;
 
       const duration = calculateRequestDuration(
         model,
         gpuType,
-        { inputTokens: avgInputTokens, outputTokens: avgOutputTokens, category: workloadType },
+        {
+          id: workloadType,
+          name: workloadType,
+          description: `Generated ${workloadType} workload`,
+          inputTokens: avgInputTokens,
+          outputTokens: avgOutputTokens,
+          category: workloadType as any,
+          examples: []
+        },
         targetBatchSize,
         precision
       );

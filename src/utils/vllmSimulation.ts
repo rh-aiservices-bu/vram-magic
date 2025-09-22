@@ -8,16 +8,95 @@
 import { calculateTotalVRAMvLLM } from './vramCalculations';
 import { calculateRequestDuration } from './generationSpeed';
 import { PRECISION_BYTES } from '../constants';
+import { Model, Workload, WorkloadSlot, WorkloadCategory } from '../types';
+
+interface RequestConfig {
+  totalRequests: number;
+  duration: number;
+  distribution: string;
+  model: Model;
+  gpuType: string;
+  workloadMix: Record<string, number>;
+  precision?: string;
+}
+
+interface RequestObject {
+  id: number;
+  startTime: number;
+  endTime: number;
+  duration: number;
+  workload: Workload;
+  prefillTime: number;
+  generationTime: number;
+}
+
+interface VRAMBreakdown {
+  baseModelGB: number;
+  kvCacheGB: number;
+  activationsGB: number;
+  overheadGB: number;
+}
+
+interface VRAMDetails {
+  kvCache: any;
+  activations: any;
+}
+
+interface VRAMMetadata {
+  isGQA: boolean;
+  gqaCompressionRatio?: number;
+  blocksUsed?: number;
+  effectiveTokens?: number;
+  actualTokens?: number;
+  precision: string;
+  concurrentUsers?: number;
+  sequenceLength?: number;
+}
+
+interface VRAMSample {
+  timestamp: number;
+  concurrentUsers: number;
+  vramGB: number;
+  breakdown: VRAMBreakdown;
+  details?: VRAMDetails;
+  metadata: VRAMMetadata;
+}
+
+interface SimulationStats {
+  maxVRAM: number;
+  minVRAM: number;
+  avgVRAM: number;
+  maxConcurrentUsers: number;
+  avgConcurrentUsers: number;
+  totalRequests: number;
+  effectiveThroughput: number;
+  gqaEnabled: boolean;
+  compressionRatio: number;
+}
+
+interface SimulationConfig {
+  model: Model;
+  workloadSlots: WorkloadSlot[];
+  duration: number;
+  maxConcurrentUsers: number;
+  gpuType: string;
+  precision?: string;
+  distribution?: string;
+  timePattern?: string;
+}
+
+interface SimulationResult {
+  samples: VRAMSample[];
+  stats: SimulationStats;
+  config: SimulationConfig;
+  recommendations: string[];
+}
 
 /**
  * Generate proper bell curve (normal) distribution using Box-Muller transform
- *
- * @param {number} numRequests - Number of requests to generate
- * @param {number} durationSeconds - Total duration in seconds
- * @returns {Array<number>} Array of timestamps following normal distribution
  */
-export function generateBellCurveDistribution(numRequests, durationSeconds) {
-  const timestamps = [];
+export function generateBellCurveDistribution(numRequests: number, durationSeconds: number): number[] {
+  const timestamps: number[] = [];
   const mean = durationSeconds / 2;
   const stdDev = durationSeconds / 6; // 99.7% within duration
 
@@ -43,12 +122,8 @@ export function generateBellCurveDistribution(numRequests, durationSeconds) {
 /**
  * Calculate concurrent users with vLLM continuous batching
  * Accounts for dynamic joining/leaving of requests
- *
- * @param {number} currentTime - Current simulation time
- * @param {Array} requests - Array of request objects with timestamps and durations
- * @returns {number} Number of concurrent users at current time
  */
-export function calculateConcurrentUsersVLLM(currentTime, requests) {
+export function calculateConcurrentUsersVLLM(currentTime: number, requests: RequestObject[]): number {
   let activeRequests = 0;
 
   for (const request of requests) {
@@ -63,11 +138,8 @@ export function calculateConcurrentUsersVLLM(currentTime, requests) {
 
 /**
  * Simulate request lifecycle with vLLM
- *
- * @param {Object} config - Simulation configuration
- * @returns {Array} Array of request objects with timing information
  */
-export function generateRequests(config) {
+export function generateRequests(config: RequestConfig): RequestObject[] {
   const {
     totalRequests,
     duration,
@@ -79,7 +151,7 @@ export function generateRequests(config) {
   } = config;
 
   // Generate timestamps based on distribution
-  let timestamps;
+  let timestamps: number[];
   if (distribution === 'bell_curve') {
     timestamps = generateBellCurveDistribution(totalRequests, duration);
   } else if (distribution === 'uniform') {
@@ -99,7 +171,7 @@ export function generateRequests(config) {
     const workloadType = selectWorkloadFromMix(workloadMix);
 
     // Get realistic duration for this request
-    const duration = calculateRequestDuration(
+    const requestDuration = calculateRequestDuration(
       model,
       gpuType,
       workloadType,
@@ -110,11 +182,11 @@ export function generateRequests(config) {
     return {
       id: idx,
       startTime: timestamp,
-      endTime: timestamp + duration.totalSeconds,
-      duration: duration.totalSeconds,
+      endTime: timestamp + requestDuration.totalSeconds,
+      duration: requestDuration.totalSeconds,
       workload: workloadType,
-      prefillTime: duration.breakdown.prefillTime,
-      generationTime: duration.breakdown.generationTime
+      prefillTime: requestDuration.breakdown.prefillTime,
+      generationTime: requestDuration.breakdown.generationTime
     };
   });
 
@@ -123,11 +195,8 @@ export function generateRequests(config) {
 
 /**
  * Main vLLM simulation runner
- *
- * @param {Object} config - Complete simulation configuration
- * @returns {Object} Simulation results with VRAM usage over time
  */
-export function runVLLMSimulation(config) {
+export function runVLLMSimulation(config: SimulationConfig): SimulationResult {
   const {
     model,
     workloadSlots,
@@ -167,7 +236,7 @@ export function runVLLMSimulation(config) {
 
   // Sample VRAM usage over time
   const sampleInterval = Math.max(1, Math.floor(duration / 100)); // 100 samples max
-  const samples = [];
+  const samples: VRAMSample[] = [];
 
   for (let t = 0; t <= duration; t += sampleInterval) {
     // Calculate concurrent users at this timestamp
@@ -196,7 +265,7 @@ export function runVLLMSimulation(config) {
       });
     } else {
       // Just model loaded, no active requests
-      const baseVRAM = model.parameters * PRECISION_BYTES[precision] * 1.2;
+      const baseVRAM = model.parameters * (PRECISION_BYTES[precision as keyof typeof PRECISION_BYTES] || 2) * 1.2;
       samples.push({
         timestamp: t,
         concurrentUsers: 0,
@@ -216,7 +285,7 @@ export function runVLLMSimulation(config) {
   }
 
   // Calculate statistics
-  const stats = {
+  const stats: SimulationStats = {
     maxVRAM: Math.max(...samples.map(s => s.vramGB)),
     minVRAM: Math.min(...samples.map(s => s.vramGB)),
     avgVRAM: samples.reduce((sum, s) => sum + s.vramGB, 0) / samples.length,
@@ -239,13 +308,9 @@ export function runVLLMSimulation(config) {
 
 /**
  * Generate GPU recommendations based on VRAM requirements
- *
- * @param {number} requiredVRAMGB - Required VRAM in GB
- * @param {boolean} gqaEnabled - Whether GQA is enabled
- * @returns {Array<string>} GPU recommendations
  */
-function generateGPURecommendations(requiredVRAMGB, gqaEnabled = false) {
-  const recommendations = [];
+function generateGPURecommendations(requiredVRAMGB: number, gqaEnabled: boolean = false): string[] {
+  const recommendations: string[] = [];
 
   // Add GQA notice if applicable
   if (gqaEnabled) {
@@ -280,37 +345,41 @@ function generateGPURecommendations(requiredVRAMGB, gqaEnabled = false) {
 }
 
 // Helper functions
-function calculateWeightedWorkload(workloadSlots) {
+function calculateWeightedWorkload(workloadSlots: WorkloadSlot[]): Workload {
   const activeSlots = workloadSlots.filter(slot => slot.isActive && slot.workload);
 
   const totalInputTokens = activeSlots.reduce(
-    (sum, slot) => sum + (slot.workload.inputTokens * slot.percentage) / 100,
+    (sum, slot) => sum + (slot.workload!.inputTokens * slot.percentage) / 100,
     0
   );
 
   const totalOutputTokens = activeSlots.reduce(
-    (sum, slot) => sum + (slot.workload.outputTokens * slot.percentage) / 100,
+    (sum, slot) => sum + (slot.workload!.outputTokens * slot.percentage) / 100,
     0
   );
 
   return {
+    id: 'weighted',
+    name: 'Weighted Workload',
+    description: 'Combined workload from active slots',
     inputTokens: Math.round(totalInputTokens),
     outputTokens: Math.round(totalOutputTokens),
-    category: activeSlots[0]?.workload?.category || 'chat'
+    category: activeSlots[0]?.workload?.category || WorkloadCategory.CHAT,
+    examples: []
   };
 }
 
-function extractWorkloadMix(workloadSlots) {
-  const mix = {};
+function extractWorkloadMix(workloadSlots: WorkloadSlot[]): Record<string, number> {
+  const mix: Record<string, number> = {};
   workloadSlots
     .filter(slot => slot.isActive && slot.workload)
     .forEach(slot => {
-      mix[slot.workload.category] = slot.percentage / 100;
+      mix[slot.workload!.category] = slot.percentage / 100;
     });
   return mix;
 }
 
-function selectWorkloadFromMix(workloadMix) {
+function selectWorkloadFromMix(workloadMix: Record<string, number>): Workload {
   const random = Math.random();
   let cumulative = 0;
 
@@ -318,17 +387,29 @@ function selectWorkloadFromMix(workloadMix) {
     cumulative += weight;
     if (random < cumulative) {
       return {
-        category,
+        id: category,
+        name: category,
+        description: `Generated ${category} workload`,
+        category: category as WorkloadCategory,
         inputTokens: category === 'rag' ? 2000 : 500,
-        outputTokens: category === 'code' ? 500 : 200
+        outputTokens: category === 'coding' ? 500 : 200,
+        examples: []
       };
     }
   }
 
-  return { category: 'chat', inputTokens: 500, outputTokens: 200 };
+  return {
+    id: 'chat',
+    name: 'Chat',
+    description: 'Default chat workload',
+    category: WorkloadCategory.CHAT,
+    inputTokens: 500,
+    outputTokens: 200,
+    examples: []
+  };
 }
 
-function getTimePatternMultiplier(timestamp, duration, pattern) {
+function getTimePatternMultiplier(timestamp: number, _duration: number, pattern: string): number {
   // Simplified time pattern multiplier
   switch (pattern) {
     case 'peak_hours':
