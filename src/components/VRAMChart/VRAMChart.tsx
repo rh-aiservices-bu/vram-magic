@@ -427,10 +427,10 @@ const MemoizedVRAMChart = React.memo(VRAMChart, (prevProps, nextProps) => {
     prevProps.maxVRAM === nextProps.maxVRAM &&
     prevProps.data.length === nextProps.data.length &&
     // For data array, check if first and last items are the same (optimization)
-    (prevProps.data.length === 0 || (
-      prevProps.data[0]?.timestamp === nextProps.data[0]?.timestamp &&
-      prevProps.data[prevProps.data.length - 1]?.timestamp === nextProps.data[nextProps.data.length - 1]?.timestamp
-    ))
+    (prevProps.data.length === 0 ||
+      (prevProps.data[0]?.timestamp === nextProps.data[0]?.timestamp &&
+        prevProps.data[prevProps.data.length - 1]?.timestamp ===
+          nextProps.data[nextProps.data.length - 1]?.timestamp))
   )
 })
 

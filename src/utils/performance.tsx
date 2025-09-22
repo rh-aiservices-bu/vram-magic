@@ -145,7 +145,11 @@ export const memoizedVRAMCalculation = createMemoizedFunction(
     precision: ModelPrecision
   ): VRAMBreakdown => {
     // Import and use actual VRAM calculation functions
-    const { calculateBaseMemory, calculateKVCache, calculateActivations } = require('../services/vramCalculator')
+    const {
+      calculateBaseMemory,
+      calculateKVCache,
+      calculateActivations,
+    } = require('../services/vramCalculator')
 
     const baseModel = calculateBaseMemory(model, precision)
     const kvCache = calculateKVCache(model, sequenceLength, batchSize, precision)
@@ -198,7 +202,7 @@ export const memoizedSimulationResults = createMemoizedFunction(
       .sort()
       .join('|')
 
-    return `sim:${model.id}:${workloadSignature}:${period.durationSeconds}:${period.concurrentUsers}:${period.requestPattern}`
+    return `sim:${model.id}:${workloadSignature}:${period.durationSeconds}:${period.totalUsers}:${period.requestPattern}`
   }
 )
 

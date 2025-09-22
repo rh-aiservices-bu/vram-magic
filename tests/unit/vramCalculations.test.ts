@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest'
 import {
   calculateKVCacheVLLM,
   calculateTotalVRAMvLLM,
-  compareCalculationMethods
-} from '../../src/utils/vramCalculations';
-import { Model, ModelPrecision, Workload, WorkloadCategory } from '../../src/types';
+  compareCalculationMethods,
+} from '../../src/utils/vramCalculations'
+import { Model, ModelPrecision, Workload, WorkloadCategory } from '../../src/types'
 
 describe('vLLM VRAM Calculations', () => {
   // Test case: Llama 2 7B (no GQA)
@@ -22,13 +22,13 @@ describe('vLLM VRAM Calculations', () => {
       headDim: 128,
       useGQA: false,
       vocabularySize: 32000,
-      maxSequenceLength: 4096
+      maxSequenceLength: 4096,
     },
     vramRequirements: {
       baseVRAM: 13.0,
       kvCacheCoefficient: 0.1,
       activationMultiplier: 1.5,
-      overheadFactor: 1.2
+      overheadFactor: 1.2,
     },
     vllmOptimizations: {
       blockSize: 16,
@@ -36,16 +36,16 @@ describe('vLLM VRAM Calculations', () => {
       continuousBatching: true,
       pagedAttention: true,
       cudaGraphSupported: true,
-      flashAttentionCompatible: true
+      flashAttentionCompatible: true,
     },
     performance: [],
     metadata: {
       releaseDate: '2023-07-18',
       organization: 'Meta',
       license: 'Custom',
-      tags: ['llm', 'test']
-    }
-  };
+      tags: ['llm', 'test'],
+    },
+  }
 
   // Test case: Llama 2 70B (with GQA)
   const llama2_70b: Model = {
@@ -62,13 +62,13 @@ describe('vLLM VRAM Calculations', () => {
       headDim: 128,
       useGQA: true,
       vocabularySize: 32000,
-      maxSequenceLength: 4096
+      maxSequenceLength: 4096,
     },
     vramRequirements: {
       baseVRAM: 140.0,
       kvCacheCoefficient: 0.1,
       activationMultiplier: 1.5,
-      overheadFactor: 1.2
+      overheadFactor: 1.2,
     },
     vllmOptimizations: {
       blockSize: 16,
@@ -76,53 +76,53 @@ describe('vLLM VRAM Calculations', () => {
       continuousBatching: true,
       pagedAttention: true,
       cudaGraphSupported: true,
-      flashAttentionCompatible: true
+      flashAttentionCompatible: true,
     },
     performance: [],
     metadata: {
       releaseDate: '2023-07-18',
       organization: 'Meta',
       license: 'Custom',
-      tags: ['llm', 'test']
-    }
-  };
+      tags: ['llm', 'test'],
+    },
+  }
 
   describe('GQA Support', () => {
     it('should correctly calculate KV-cache for non-GQA model', () => {
       const result = calculateKVCacheVLLM(
         llama2_7b,
         2048, // sequence length
-        4,    // batch size
-        2     // FP16 precision
-      );
+        4, // batch size
+        2 // FP16 precision
+      )
 
-      expect(result.breakdown.isGQA).toBe(false);
-      expect(result.breakdown.kvHeads).toBe(32);
-      expect(result.breakdown.gqaCompressionRatio).toBe(1);
-    });
+      expect(result.breakdown.isGQA).toBe(false)
+      expect(result.breakdown.kvHeads).toBe(32)
+      expect(result.breakdown.gqaCompressionRatio).toBe(1)
+    })
 
     it('should correctly calculate KV-cache for GQA model', () => {
       const result = calculateKVCacheVLLM(
         llama2_70b,
         4096, // sequence length
-        16,   // batch size
-        2     // FP16 precision
-      );
+        16, // batch size
+        2 // FP16 precision
+      )
 
-      expect(result.breakdown.isGQA).toBe(true);
-      expect(result.breakdown.kvHeads).toBe(8);
-      expect(result.breakdown.gqaCompressionRatio).toBe(8); // 64/8
+      expect(result.breakdown.isGQA).toBe(true)
+      expect(result.breakdown.kvHeads).toBe(8)
+      expect(result.breakdown.gqaCompressionRatio).toBe(8) // 64/8
 
       // The KV-cache should be ~8x smaller than without GQA
-      const bytesPerGB = 1024 ** 3;
-      const kvCacheGB = result.bytes / bytesPerGB;
+      const bytesPerGB = 1024 ** 3
+      const kvCacheGB = result.bytes / bytesPerGB
 
       // The KV-cache should be significantly smaller than without GQA
       // Let's be more flexible with the exact value for now
-      expect(kvCacheGB).toBeLessThan(30); // Should be much less than 30GB
-      expect(kvCacheGB).toBeGreaterThan(1); // Should be more than 1GB
-    });
-  });
+      expect(kvCacheGB).toBeLessThan(30) // Should be much less than 30GB
+      expect(kvCacheGB).toBeGreaterThan(1) // Should be more than 1GB
+    })
+  })
 
   describe('Block Allocation', () => {
     it('should round up to block size', () => {
@@ -131,14 +131,14 @@ describe('vLLM VRAM Calculations', () => {
         1000, // Not divisible by 16
         1,
         2
-      );
+      )
 
       // 1000 tokens should round up to 1008 (63 blocks * 16)
-      expect(result.breakdown.effectiveTokens).toBe(1008);
-      expect(result.breakdown.actualTokens).toBe(1000);
-      expect(result.breakdown.blocksUsed).toBe(63);
-    });
-  });
+      expect(result.breakdown.effectiveTokens).toBe(1008)
+      expect(result.breakdown.actualTokens).toBe(1000)
+      expect(result.breakdown.blocksUsed).toBe(63)
+    })
+  })
 
   describe('Activation Memory', () => {
     it('should use inference multiplier (1.5x) not training (4x)', () => {
@@ -149,21 +149,21 @@ describe('vLLM VRAM Calculations', () => {
         inputTokens: 1000,
         outputTokens: 1000,
         category: WorkloadCategory.CHAT,
-        examples: []
-      };
+        examples: [],
+      }
 
       const result = calculateTotalVRAMvLLM(
         llama2_7b,
         workload,
         4, // concurrent users
         'fp16'
-      );
+      )
 
       // Activations should be using 1.5x multiplier
-      expect(result.details.activations.multiplierUsed).toBe(1.5);
-      expect(result.details.activations.inferenceOptimized).toBe(true);
-    });
-  });
+      expect(result.details.activations.multiplierUsed).toBe(1.5)
+      expect(result.details.activations.inferenceOptimized).toBe(true)
+    })
+  })
 
   describe('Comparison with Old Method', () => {
     it('should show significant improvement for GQA models', () => {
@@ -174,36 +174,38 @@ describe('vLLM VRAM Calculations', () => {
         inputTokens: 2048,
         outputTokens: 2048,
         category: WorkloadCategory.CHAT,
-        examples: []
-      };
+        examples: [],
+      }
 
       const comparison = compareCalculationMethods(
         llama2_70b,
         workload,
         16, // concurrent users
         'fp16'
-      );
+      )
 
       // The comparison should show some difference between old and new methods
-      expect(Math.abs(comparison.oldMethod.totalGB - comparison.newMethod.totalGB)).toBeGreaterThan(0);
+      expect(Math.abs(comparison.oldMethod.totalGB - comparison.newMethod.totalGB)).toBeGreaterThan(
+        0
+      )
 
       // For GQA models, there should be some improvement (the sign may vary)
-      expect(Math.abs(comparison.improvement.percentReduction)).toBeGreaterThan(0);
+      expect(Math.abs(comparison.improvement.percentReduction)).toBeGreaterThan(0)
 
       // Should save some memory (the amount may vary based on implementation)
-      expect(typeof comparison.improvement.gbSaved).toBe('number');
-    });
-  });
+      expect(typeof comparison.improvement.gbSaved).toBe('number')
+    })
+  })
 
   describe('Real-world Validation', () => {
     // These test cases are based on actual vLLM deployments
     interface TestCase {
-      name: string;
-      model: Model;
-      sequenceLength: number;
-      batchSize: number;
-      precision: string;
-      expected: { totalGB: number; tolerance: number };
+      name: string
+      model: Model
+      sequenceLength: number
+      batchSize: number
+      precision: string
+      expected: { totalGB: number; tolerance: number }
     }
 
     const testCases: TestCase[] = [
@@ -213,7 +215,7 @@ describe('vLLM VRAM Calculations', () => {
         sequenceLength: 2048,
         batchSize: 4,
         precision: 'fp16',
-        expected: { totalGB: 21.5, tolerance: 2 }
+        expected: { totalGB: 21.5, tolerance: 2 },
       },
       {
         name: 'Llama 2 70B with GQA - Large Batch',
@@ -221,9 +223,9 @@ describe('vLLM VRAM Calculations', () => {
         sequenceLength: 4096,
         batchSize: 16,
         precision: 'fp16',
-        expected: { totalGB: 200, tolerance: 50 }
-      }
-    ];
+        expected: { totalGB: 200, tolerance: 50 },
+      },
+    ]
 
     testCases.forEach(testCase => {
       it(`should match real deployment: ${testCase.name}`, () => {
@@ -234,20 +236,20 @@ describe('vLLM VRAM Calculations', () => {
           inputTokens: testCase.sequenceLength / 2,
           outputTokens: testCase.sequenceLength / 2,
           category: WorkloadCategory.CHAT,
-          examples: []
-        };
+          examples: [],
+        }
 
         const result = calculateTotalVRAMvLLM(
           testCase.model,
           workload,
           testCase.batchSize,
           testCase.precision
-        );
+        )
 
         // Check if within tolerance
-        const difference = Math.abs(result.totalGB - testCase.expected.totalGB);
-        expect(difference).toBeLessThan(testCase.expected.tolerance);
-      });
-    });
-  });
-});
+        const difference = Math.abs(result.totalGB - testCase.expected.totalGB)
+        expect(difference).toBeLessThan(testCase.expected.tolerance)
+      })
+    })
+  })
+})

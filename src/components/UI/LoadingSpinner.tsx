@@ -104,11 +104,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     <SpinnerContainer center={center} className={className}>
       {spinner}
       {message && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={MESSAGE_STYLES}
-        >
+        <Typography variant="body2" color="text.secondary" sx={MESSAGE_STYLES}>
           {message}
         </Typography>
       )}
@@ -118,10 +114,7 @@ const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   if (overlay) {
     return (
       <>
-        <Backdrop
-          open={true}
-          sx={BACKDROP_STYLES}
-        />
+        <Backdrop open={true} sx={BACKDROP_STYLES} />
         <Fade in={true} timeout={300}>
           <OverlayContainer elevation={8}>{content}</OverlayContainer>
         </Fade>

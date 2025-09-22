@@ -44,7 +44,7 @@ interface UseSimulationReturn {
   // Configuration management
   updatePeriod: (updates: Partial<SimulationPeriod>) => void
   setPeriodDuration: (duration: number, unit?: 'seconds' | 'minutes' | 'hours') => void
-  setConcurrentUsers: (users: number) => void
+  setTotalUsers: (users: number) => void
   setRequestPattern: (pattern: RequestPattern) => void
   validateConfiguration: () => ValidationError[]
 
@@ -231,7 +231,7 @@ export function useSimulation(): UseSimulationReturn {
         // Set quick simulation parameters
         updatePeriod({
           duration,
-          concurrentUsers: Math.min(originalPeriod.concurrentUsers, 5),
+          totalUsers: Math.min(originalPeriod.totalUsers, 15),
           requestPattern: RequestPattern.UNIFORM,
         })
 
@@ -267,9 +267,9 @@ export function useSimulation(): UseSimulationReturn {
     [updatePeriod]
   )
 
-  const setConcurrentUsers = useCallback(
+  const setTotalUsers = useCallback(
     (users: number) => {
-      updatePeriod({ concurrentUsers: Math.max(1, Math.floor(users)) })
+      updatePeriod({ totalUsers: Math.max(1, Math.floor(users)) })
     },
     [updatePeriod]
   )
@@ -411,13 +411,15 @@ export function useSimulation(): UseSimulationReturn {
       suggestions.push('Consider model quantization (INT8/INT4) to reduce VRAM requirements')
     }
 
-    // Many concurrent users with high VRAM
-    if (config.period.concurrentUsers > 20 && metrics.maxVRAM > 16 * 1024) {
+    // Many total users with high VRAM
+    const derivedConcurrency =
+      config.period.derivedPeakConcurrency || config.period.totalUsers * 0.3
+    if (derivedConcurrency > 20 && metrics.maxVRAM > 16 * 1024) {
       suggestions.push('Consider request queuing or load balancing to reduce peak VRAM usage')
     }
 
     return suggestions
-  }, [results, metrics, config.period.concurrentUsers])
+  }, [results, metrics, config.period.derivedPeakConcurrency, config.period.totalUsers])
 
   // GPU comparison
   const compareWithGPU = useCallback(
@@ -504,7 +506,7 @@ export function useSimulation(): UseSimulationReturn {
     // Configuration management
     updatePeriod,
     setPeriodDuration,
-    setConcurrentUsers,
+    setTotalUsers,
     setRequestPattern,
     validateConfiguration,
 

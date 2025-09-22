@@ -1,7 +1,14 @@
 // VRAM Magic: Demo Scenarios
 // Realistic use case scenarios with complete configurations
 
-import { SimulationConfig, TimeUnit, RequestPattern, ModelPrecision } from '../types'
+import {
+  SimulationConfig,
+  TimeUnit,
+  RequestPattern,
+  ModelPrecision,
+  ThinkTimeDistribution,
+  UserBehaviorPattern,
+} from '../types'
 
 // ============================================================================
 // Demo Scenario Types
@@ -60,7 +67,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 8,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 5,
+        totalUsers: 15,
+        maxThinkTime: 45,
+        thinkTimeDistribution: ThinkTimeDistribution.BELL_CURVE,
+        userBehaviorPattern: UserBehaviorPattern.CODE_ASSISTANCE,
         requestPattern: RequestPattern.UNIFORM,
         granularity: 300, // 5 minutes
         durationSeconds: 28800, // 8 hours * 3600
@@ -114,7 +124,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 12,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 8,
+        totalUsers: 24,
+        maxThinkTime: 60,
+        thinkTimeDistribution: ThinkTimeDistribution.EXPONENTIAL,
+        userBehaviorPattern: UserBehaviorPattern.CUSTOMER_SUPPORT,
         requestPattern: RequestPattern.BELL_CURVE,
         granularity: 300,
         durationSeconds: 43200, // 12 hours * 3600
@@ -169,7 +182,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 10,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 15,
+        totalUsers: 45,
+        maxThinkTime: 30,
+        thinkTimeDistribution: ThinkTimeDistribution.BELL_CURVE,
+        userBehaviorPattern: UserBehaviorPattern.CONTENT_CREATION,
         requestPattern: RequestPattern.UNIFORM,
         granularity: 300,
         durationSeconds: 36000, // 10 hours * 3600
@@ -223,7 +239,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 9,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 25,
+        totalUsers: 75,
+        maxThinkTime: 20,
+        thinkTimeDistribution: ThinkTimeDistribution.BELL_CURVE,
+        userBehaviorPattern: UserBehaviorPattern.CODE_ASSISTANCE,
         requestPattern: RequestPattern.FRONT_LOADED,
         granularity: 300,
         durationSeconds: 32400, // 9 hours * 3600
@@ -278,7 +297,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 24,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 50,
+        totalUsers: 150,
+        maxThinkTime: 90,
+        thinkTimeDistribution: ThinkTimeDistribution.LOGNORMAL,
+        userBehaviorPattern: UserBehaviorPattern.RESEARCH_QUERIES,
         requestPattern: RequestPattern.UNIFORM,
         granularity: 600, // 10 minutes for longer duration
         durationSeconds: 86400, // 24 hours * 3600
@@ -332,7 +354,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 16,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 80,
+        totalUsers: 240,
+        maxThinkTime: 10,
+        thinkTimeDistribution: ThinkTimeDistribution.EXPONENTIAL,
+        userBehaviorPattern: UserBehaviorPattern.API_SERVICE,
         requestPattern: RequestPattern.BELL_CURVE,
         granularity: 300,
         durationSeconds: 57600, // 16 hours * 3600
@@ -386,7 +411,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 24,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 35,
+        totalUsers: 105,
+        maxThinkTime: 120,
+        thinkTimeDistribution: ThinkTimeDistribution.UNIFORM,
+        userBehaviorPattern: UserBehaviorPattern.DATA_ANALYSIS,
         requestPattern: RequestPattern.UNIFORM,
         granularity: 600,
         durationSeconds: 86400, // 24 hours * 3600
@@ -441,7 +469,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 12,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 40,
+        totalUsers: 120,
+        maxThinkTime: 180,
+        thinkTimeDistribution: ThinkTimeDistribution.LOGNORMAL,
+        userBehaviorPattern: UserBehaviorPattern.RESEARCH_QUERIES,
         requestPattern: RequestPattern.BELL_CURVE,
         granularity: 300,
         durationSeconds: 43200, // 12 hours * 3600
@@ -495,7 +526,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       period: {
         duration: 18,
         timeUnit: TimeUnit.HOURS,
-        concurrentUsers: 30,
+        totalUsers: 90,
+        maxThinkTime: 240,
+        thinkTimeDistribution: ThinkTimeDistribution.LOGNORMAL,
+        userBehaviorPattern: UserBehaviorPattern.RESEARCH_QUERIES,
         requestPattern: RequestPattern.UNIFORM,
         granularity: 300,
         durationSeconds: 64800, // 18 hours * 3600

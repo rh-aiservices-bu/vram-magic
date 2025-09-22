@@ -10,6 +10,8 @@ import {
   RequestPattern,
   ModelPrecision,
   ValidationError,
+  ThinkTimeDistribution,
+  UserBehaviorPattern,
 } from '../../types'
 
 // Sample simulation configurations
@@ -21,7 +23,10 @@ const createSimulationConfig = (
   period: {
     duration: 30,
     timeUnit: TimeUnit.MINUTES,
-    concurrentUsers: 10,
+    totalUsers: 30,
+    maxThinkTime: 30,
+    thinkTimeDistribution: ThinkTimeDistribution.BELL_CURVE,
+    userBehaviorPattern: UserBehaviorPattern.INTERACTIVE_CHAT,
     requestPattern: RequestPattern.UNIFORM,
     granularity: 60,
     durationSeconds: 1800,
@@ -36,20 +41,26 @@ const defaultConfig = createSimulationConfig({})
 const longSimulationConfig = createSimulationConfig({
   duration: 24,
   timeUnit: TimeUnit.HOURS,
-  concurrentUsers: 50,
+  totalUsers: 150,
+  maxThinkTime: 60,
+  thinkTimeDistribution: ThinkTimeDistribution.BELL_CURVE,
+  userBehaviorPattern: UserBehaviorPattern.INTERACTIVE_CHAT,
   durationSeconds: 86400,
 })
 const heavyLoadConfig = createSimulationConfig({
   duration: 2,
   timeUnit: TimeUnit.HOURS,
-  concurrentUsers: 100,
+  totalUsers: 300,
+  maxThinkTime: 20,
+  thinkTimeDistribution: ThinkTimeDistribution.EXPONENTIAL,
+  userBehaviorPattern: UserBehaviorPattern.API_SERVICE,
   requestPattern: RequestPattern.FRONT_LOADED,
   durationSeconds: 7200,
 })
 const invalidConfig = createSimulationConfig(
   {
     duration: 0,
-    concurrentUsers: -5,
+    totalUsers: -5,
   },
   false,
   [
@@ -59,8 +70,8 @@ const invalidConfig = createSimulationConfig(
       severity: 'error',
     },
     {
-      field: 'concurrentUsers',
-      message: 'Concurrent users must be a positive number',
+      field: 'totalUsers',
+      message: 'Total users must be a positive number',
       severity: 'error',
     },
   ]
@@ -264,7 +275,10 @@ export const QuickTest: Story = {
     config: createSimulationConfig({
       duration: 5,
       timeUnit: TimeUnit.MINUTES,
-      concurrentUsers: 1,
+      totalUsers: 3,
+      maxThinkTime: 60,
+      thinkTimeDistribution: ThinkTimeDistribution.UNIFORM,
+      userBehaviorPattern: UserBehaviorPattern.INTERACTIVE_CHAT,
       requestPattern: RequestPattern.UNIFORM,
       granularity: 30,
       durationSeconds: 300,
@@ -289,7 +303,10 @@ export const BurstPattern: Story = {
     config: createSimulationConfig({
       duration: 1,
       timeUnit: TimeUnit.HOURS,
-      concurrentUsers: 25,
+      totalUsers: 75,
+      maxThinkTime: 45,
+      thinkTimeDistribution: ThinkTimeDistribution.BELL_CURVE,
+      userBehaviorPattern: UserBehaviorPattern.CODE_ASSISTANCE,
       requestPattern: RequestPattern.FRONT_LOADED,
       granularity: 120,
       durationSeconds: 3600,
@@ -314,7 +331,10 @@ export const EnterpriseScale: Story = {
     config: createSimulationConfig({
       duration: 7,
       timeUnit: TimeUnit.DAYS,
-      concurrentUsers: 200,
+      totalUsers: 600,
+      maxThinkTime: 120,
+      thinkTimeDistribution: ThinkTimeDistribution.LOGNORMAL,
+      userBehaviorPattern: UserBehaviorPattern.RESEARCH_QUERIES,
       requestPattern: RequestPattern.BELL_CURVE,
       granularity: 300,
       precision: ModelPrecision.FP32,

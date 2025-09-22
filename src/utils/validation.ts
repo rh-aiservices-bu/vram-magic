@@ -2,7 +2,7 @@
 // Type-safe validation functions using Zod for React components
 
 import { z } from 'zod'
-import { ModelPrecision } from '../types'
+import { ModelPrecision, ThinkTimeDistribution, UserBehaviorPattern } from '../types'
 
 // ============================================================================
 // Type Definitions (Based on contracts/types.ts)
@@ -88,9 +88,24 @@ export interface WorkloadSlot {
 export interface SimulationPeriod {
   duration: number
   timeUnit: TimeUnit
-  concurrentUsers: number
+  totalUsers: number
+  maxThinkTime: number
+  thinkTimeDistribution: 'bell_curve' | 'exponential' | 'uniform' | 'poisson' | 'lognormal'
+  userBehaviorPattern:
+    | 'interactive_chat'
+    | 'api_service'
+    | 'content_creation'
+    | 'data_analysis'
+    | 'code_assistance'
+    | 'customer_support'
+    | 'research_queries'
+    | 'custom'
   requestPattern: RequestPattern
   granularity: number
+  durationSeconds: number
+  precision: 'fp32' | 'fp16' | 'int8' | 'int4'
+  derivedPeakConcurrency?: number
+  derivedAverageConcurrency?: number
 }
 
 // ============================================================================
@@ -182,12 +197,37 @@ export const WorkloadSlotSchema = z.object({
   order: z.number().min(1).max(5).int(),
 })
 
+const ThinkTimeDistributionSchema = z.enum([
+  'bell_curve',
+  'exponential',
+  'uniform',
+  'poisson',
+  'lognormal',
+])
+const UserBehaviorPatternSchema = z.enum([
+  'interactive_chat',
+  'api_service',
+  'content_creation',
+  'data_analysis',
+  'code_assistance',
+  'customer_support',
+  'research_queries',
+  'custom',
+])
+
 export const SimulationPeriodSchema = z.object({
   duration: z.number().min(1).max(86400),
   timeUnit: TimeUnitSchema,
-  concurrentUsers: z.number().min(1).max(10000).int(),
+  totalUsers: z.number().min(1).max(10000).int(),
+  maxThinkTime: z.number().min(0).max(3600),
+  thinkTimeDistribution: ThinkTimeDistributionSchema,
+  userBehaviorPattern: UserBehaviorPatternSchema,
   requestPattern: RequestPatternSchema,
   granularity: z.number().min(1).max(3600).int(),
+  durationSeconds: z.number().min(1).max(86400),
+  precision: z.enum(['fp32', 'fp16', 'int8', 'int4']),
+  derivedPeakConcurrency: z.number().optional(),
+  derivedAverageConcurrency: z.number().optional(),
 })
 
 // ============================================================================
@@ -363,13 +403,9 @@ export function validateSimulationPeriod(period: unknown): ValidationError[] {
     }
 
     // Only warn about performance if the value is within schema limits but still high
-    if (
-      typeof p.concurrentUsers === 'number' &&
-      p.concurrentUsers > 1000 &&
-      p.concurrentUsers <= 10000
-    ) {
+    if (typeof p.totalUsers === 'number' && p.totalUsers > 3000 && p.totalUsers <= 30000) {
       errors.push({
-        field: 'concurrentUsers',
+        field: 'totalUsers',
         message: 'High user counts may impact calculation performance',
         severity: 'warning',
       })
@@ -513,9 +549,14 @@ export interface ValidationResult<T> {
 export const DEFAULT_SIMULATION_PERIOD: SimulationPeriod = {
   duration: 60,
   timeUnit: 'minutes' as TimeUnit,
-  concurrentUsers: 10,
+  totalUsers: 30,
+  maxThinkTime: 30,
+  thinkTimeDistribution: 'bell_curve' as ThinkTimeDistribution,
+  userBehaviorPattern: 'interactive_chat' as UserBehaviorPattern,
   requestPattern: 'uniform' as RequestPattern,
   granularity: 1,
+  durationSeconds: 3600,
+  precision: 'fp16' as ModelPrecision,
 }
 
 export function createValidationResult<T>(data: T, errors: ValidationError[]): ValidationResult<T> {

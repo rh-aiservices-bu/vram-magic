@@ -240,10 +240,9 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
     if (!results?.usagePoints?.length) return null
 
     // Find first non-empty usage point with metadata
-    const pointWithMetadata = results.usagePoints.find(point =>
-      point.breakdown &&
-      typeof point.breakdown === 'object' &&
-      'metadata' in point.breakdown
+    const pointWithMetadata = results.usagePoints.find(
+      point =>
+        point.breakdown && typeof point.breakdown === 'object' && 'metadata' in point.breakdown
     )
 
     if (!pointWithMetadata) return null
@@ -393,12 +392,14 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
               <Alert severity="success" sx={{ mt: 2 }}>
                 <AlertTitle>GQA Optimization Active</AlertTitle>
                 <Typography variant="body2">
-                  This model uses Grouped Query Attention with a {simulationResults.gqaCompressionRatio?.toFixed(1)}x
-                  compression ratio on KV-cache memory. This significantly reduces VRAM requirements compared to standard attention.
+                  This model uses Grouped Query Attention with a{' '}
+                  {simulationResults.gqaCompressionRatio?.toFixed(1)}x compression ratio on KV-cache
+                  memory. This significantly reduces VRAM requirements compared to standard
+                  attention.
                 </Typography>
                 <Typography variant="caption" display="block" sx={{ mt: 1 }}>
-                  KV Heads: {simulationResults.kvHeads} |
-                  Attention Heads: {simulationResults.attentionHeads}
+                  KV Heads: {simulationResults.kvHeads} | Attention Heads:{' '}
+                  {simulationResults.attentionHeads}
                 </Typography>
               </Alert>
             </Grid>
@@ -408,9 +409,18 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
           {showDebugInfo && simulationResults && (
             <Grid item xs={12}>
               <Paper sx={{ p: 2, mt: 2, bgcolor: 'grey.50' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 2,
+                  }}
+                >
                   <Typography variant="h6">Debug Information</Typography>
-                  <Button size="small" onClick={() => setShowDebugInfo(false)}>Hide</Button>
+                  <Button size="small" onClick={() => setShowDebugInfo(false)}>
+                    Hide
+                  </Button>
                 </Box>
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
@@ -426,7 +436,8 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="caption" display="block">
-                      Memory Pool Overhead: {((model?.vllmOptimizations?.memoryPoolOverhead || 0.15) * 100).toFixed(0)}%
+                      Memory Pool Overhead:{' '}
+                      {((model?.vllmOptimizations?.memoryPoolOverhead || 0.15) * 100).toFixed(0)}%
                     </Typography>
                     <Typography variant="caption" display="block">
                       Activation Multiplier: 1.5x (inference)
@@ -439,6 +450,72 @@ export const ResultsSummary: React.FC<ResultsSummaryProps> = ({
               </Paper>
             </Grid>
           )}
+
+          {/* Add Concurrency Analysis Section */}
+          {results.simulationPeriod &&
+            (results.simulationPeriod.derivedPeakConcurrency ||
+              results.simulationPeriod.derivedAverageConcurrency) && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Concurrency Analysis
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6} md={3}>
+                      <Box textAlign="center">
+                        <Typography variant="h4" color="primary.main" fontWeight="bold">
+                          {results.simulationPeriod?.derivedPeakConcurrency || 'N/A'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Peak Concurrent Requests
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <Box textAlign="center">
+                        <Typography variant="h4" color="secondary.main" fontWeight="bold">
+                          {results.simulationPeriod?.derivedAverageConcurrency || 'N/A'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Average Concurrent Requests
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <Box textAlign="center">
+                        <Typography variant="h4" color="info.main" fontWeight="bold">
+                          {results.simulationPeriod?.totalUsers || 'N/A'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Total Users in System
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid item xs={6} md={3}>
+                      <Box textAlign="center">
+                        <Typography variant="h4" color="warning.main" fontWeight="bold">
+                          {results.simulationPeriod?.maxThinkTime || 'N/A'}s
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Maximum Think Time
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+
+                  <Alert severity="success" sx={{ mt: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Concurrency Efficiency:</strong>{' '}
+                      {results.simulationPeriod?.derivedPeakConcurrency &&
+                      results.simulationPeriod?.totalUsers
+                        ? `${Math.round((results.simulationPeriod.derivedPeakConcurrency / results.simulationPeriod.totalUsers) * 100)}%`
+                        : 'N/A'}{' '}
+                      of users active simultaneously at peak
+                    </Typography>
+                  </Alert>
+                </Paper>
+              </Grid>
+            )}
 
           {/* Summary Statistics */}
           {summaryStats && (

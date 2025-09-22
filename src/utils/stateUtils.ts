@@ -619,8 +619,8 @@ export function getValidationErrors(state: AppState): string[] {
     errors.push(`Workload percentages must total 100% (currently ${totalPercentage}%)`)
   }
 
-  if (state.simulationPeriod.concurrentUsers <= 0) {
-    errors.push('Concurrent users must be greater than 0')
+  if (state.simulationPeriod.totalUsers <= 0) {
+    errors.push('Total users must be greater than 0')
   }
 
   if (state.simulationPeriod.durationSeconds <= 0) {

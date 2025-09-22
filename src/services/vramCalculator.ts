@@ -11,6 +11,7 @@ import type {
 } from '../types'
 import { ModelPrecision, TimePattern, RequestDistribution } from '../types'
 import { PRECISION_BYTES, VRAM_CALCULATION } from '../constants'
+import { UserSessionManager } from './userSessionManager'
 
 // ============================================================================
 // Core VRAM Calculation Functions
@@ -48,7 +49,8 @@ export function calculateKVCache(
 
   // CRITICAL FIX: Use kvHeads if available (for GQA), otherwise use attentionHeads
   const numKVHeads = model.architecture.kvHeads || model.architecture.attentionHeads
-  const headDim = model.architecture.headDim ||
+  const headDim =
+    model.architecture.headDim ||
     Math.floor(model.architecture.hiddenSize / model.architecture.attentionHeads)
 
   // vLLM block allocation (round up to 16-token blocks)
@@ -57,10 +59,10 @@ export function calculateKVCache(
   const effectiveSequenceLength = blocksNeeded * blockSize
 
   const kvCache =
-    2 *                      // Keys and Values
+    2 * // Keys and Values
     model.architecture.layers *
-    numKVHeads *            // Use KV heads, not attention heads!
-    headDim *               // Head dimension
+    numKVHeads * // Use KV heads, not attention heads!
+    headDim * // Head dimension
     effectiveSequenceLength * // Rounded to block size
     batchSize *
     precisionBytes
@@ -266,23 +268,23 @@ export function generateRequestTimestamps(
         // This creates a real bell curve, not a sine wave!
 
         // Generate two uniform random variables
-        const u1 = Math.random() || 0.01; // Avoid log(0)
-        const u2 = Math.random();
+        const u1 = Math.random() || 0.01 // Avoid log(0)
+        const u2 = Math.random()
 
         // Box-Muller transform
-        const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2)
 
         // Scale and shift to fit our time window
         // Mean at center, 99.7% within 3 standard deviations
-        const mean = durationSeconds / 2;
-        const stdDev = durationSeconds / 6; // 6 sigma covers full duration
+        const mean = durationSeconds / 2
+        const stdDev = durationSeconds / 6 // 6 sigma covers full duration
 
         // Calculate timestamp
-        let normalizedTime = mean + z0 * stdDev;
+        let normalizedTime = mean + z0 * stdDev
 
         // Clamp to valid range
-        timestamp = Math.max(0, Math.min(durationSeconds - 1, normalizedTime));
-        break;
+        timestamp = Math.max(0, Math.min(durationSeconds - 1, normalizedTime))
+        break
       }
 
       case RequestPattern.STEADY: {
@@ -648,7 +650,7 @@ export function simulateUsageOverTime(
     return []
   }
 
-  // Calculate total requests and average duration
+  // Calculate weighted average tokens across workloads
   const totalInputTokens = activeSlots.reduce(
     (sum, slot) => sum + (slot.workload!.inputTokens * slot.percentage) / 100,
     0
@@ -658,47 +660,68 @@ export function simulateUsageOverTime(
     0
   )
 
-  // Estimate average request duration (simplified: ~10ms per output token)
+  // Calculate request duration (same as before)
   const averageRequestDuration = Math.max(1, Math.floor(totalOutputTokens * 0.01))
 
-  // Calculate total requests over simulation period
-  const requestsPerSecond = simulationPeriod.concurrentUsers / averageRequestDuration
-  const totalRequests = Math.floor(requestsPerSecond * simulationPeriod.durationSeconds)
-
-  // Generate request timestamps
-  const requestTimestamps = generateRequestTimestamps(
-    totalRequests,
-    simulationPeriod.durationSeconds,
-    simulationPeriod.requestPattern
+  // NEW: Initialize user session manager with realistic behavior
+  const sessionManager = new UserSessionManager(
+    simulationPeriod.totalUsers,
+    simulationPeriod.maxThinkTime,
+    simulationPeriod.thinkTimeDistribution,
+    averageRequestDuration
   )
 
   const usagePoints: VRAMUsagePoint[] = []
-  const sampleInterval = Math.max(1, Math.floor(simulationPeriod.durationSeconds / 100)) // 100 data points max
+  const sampleInterval = Math.max(1, Math.floor(simulationPeriod.durationSeconds / 100))
+
+  // Track peak concurrency for derived values
+  let peakConcurrency = 0
+  let totalConcurrency = 0
+  let sampleCount = 0
 
   for (let t = 0; t <= simulationPeriod.durationSeconds; t += sampleInterval) {
-    let concurrentUsers = calculateConcurrentUsers(t, requestTimestamps, averageRequestDuration)
+    // Complete any finished requests
+    sessionManager.completeFinishedRequests(t)
 
-    // Apply time pattern modulation (default to BUSINESS_HOURS pattern for demonstration)
-    const timePattern = TimePattern.BUSINESS_HOURS
+    // Start new requests for ready users
+    const readyUsers = sessionManager.getUsersReadyToStart(t)
+    for (const userId of readyUsers) {
+      sessionManager.startRequest(userId, t, {
+        input: totalInputTokens,
+        output: totalOutputTokens,
+      })
+    }
+
+    // Get current concurrency
+    let currentConcurrency = sessionManager.getCurrentConcurrency(t)
+
+    // Apply time pattern modulation (existing logic)
+    const timePattern = TimePattern.BUSINESS_HOURS // TODO: Make configurable
     const timeMultiplier = applyTimePattern(t, 1.0, timePattern)
-    concurrentUsers = Math.floor(concurrentUsers * timeMultiplier)
+    currentConcurrency = Math.floor(currentConcurrency * timeMultiplier)
 
-    // Apply request distribution pattern (default to NORMAL for now)
-    const requestDistribution = RequestDistribution.NORMAL
+    // Apply request distribution pattern (existing logic)
+    const requestDistribution = RequestDistribution.NORMAL // TODO: Make configurable
     const distributionMultiplier = applyRequestDistribution(
       t,
       1.0,
       requestDistribution,
       simulationPeriod.durationSeconds
     )
-    concurrentUsers = Math.max(0, Math.floor(concurrentUsers * distributionMultiplier))
+    currentConcurrency = Math.max(0, Math.floor(currentConcurrency * distributionMultiplier))
 
-    if (concurrentUsers > 0) {
+    // Track statistics
+    peakConcurrency = Math.max(peakConcurrency, currentConcurrency)
+    totalConcurrency += currentConcurrency
+    sampleCount++
+
+    if (currentConcurrency > 0) {
+      // Calculate VRAM for current concurrency
       const vramBreakdown = calculateWorkloadVRAM(
         model,
         totalInputTokens,
         totalOutputTokens,
-        concurrentUsers,
+        currentConcurrency,
         simulationPeriod.precision || ModelPrecision.FP16
       )
 
@@ -706,7 +729,15 @@ export function simulateUsageOverTime(
         timestamp: t,
         totalVRAM: vramBreakdown.total,
         breakdown: vramBreakdown,
-        activeRequests: [],
+        activeRequests: sessionManager.getActiveRequests(t).map(req => ({
+          id: req.requestId,
+          workloadId: req.workloadId,
+          startTime: req.startTime,
+          estimatedEndTime: req.endTime,
+          inputTokens: req.inputTokens,
+          expectedOutputTokens: req.outputTokens,
+          vramUsage: vramBreakdown.total / currentConcurrency, // Approximate per-request
+        })),
       })
     } else {
       // Baseline VRAM usage (just the model loaded in memory)
@@ -714,6 +745,7 @@ export function simulateUsageOverTime(
         model,
         simulationPeriod.precision || ModelPrecision.FP16
       )
+
       usagePoints.push({
         timestamp: t,
         totalVRAM: baselineVRAM,
@@ -729,6 +761,10 @@ export function simulateUsageOverTime(
       })
     }
   }
+
+  // Update derived values in simulation period (for UI display)
+  simulationPeriod.derivedPeakConcurrency = peakConcurrency
+  simulationPeriod.derivedAverageConcurrency = Math.round(totalConcurrency / sampleCount)
 
   return usagePoints
 }

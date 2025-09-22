@@ -32,7 +32,13 @@ import {
 
 // Import types and validation
 import type { SimulationConfig, SimulationControlsProps, ValidationError } from '../../types'
-import { TimeUnit, RequestPattern, ModelPrecision } from '../../types'
+import {
+  TimeUnit,
+  RequestPattern,
+  ModelPrecision,
+  ThinkTimeDistribution,
+  UserBehaviorPattern,
+} from '../../types'
 import {
   validateSimulationPeriod,
   hasErrors,
@@ -40,7 +46,12 @@ import {
   getErrorsForField,
   formatValidationMessage,
 } from '../../utils/validation'
-import { SIMULATION_CONSTRAINTS, DEFAULT_SIMULATION_CONFIG } from '../../constants'
+import {
+  SIMULATION_CONSTRAINTS,
+  DEFAULT_SIMULATION_CONFIG,
+  USER_BEHAVIOR_PRESETS,
+} from '../../constants'
+import { estimatePeakConcurrency } from '../../services/thinkTimeGenerator'
 
 // Time unit conversion factors to seconds
 const TIME_UNIT_MULTIPLIERS = {
@@ -92,7 +103,14 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
     convertFromSeconds(config.period.duration, initialTimeUnit)
   )
   const [timeUnit, setTimeUnit] = useState<TimeUnit>(initialTimeUnit)
-  const [concurrentUsers, setConcurrentUsers] = useState(config.period.concurrentUsers)
+  const [totalUsers, setTotalUsers] = useState(config.period.totalUsers || 100)
+  const [maxThinkTime, setMaxThinkTime] = useState(config.period.maxThinkTime || 30)
+  const [thinkTimeDistribution, setThinkTimeDistribution] = useState<ThinkTimeDistribution>(
+    config.period.thinkTimeDistribution || ThinkTimeDistribution.BELL_CURVE
+  )
+  const [userBehaviorPattern, setUserBehaviorPattern] = useState<UserBehaviorPattern>(
+    config.period.userBehaviorPattern || UserBehaviorPattern.INTERACTIVE_CHAT
+  )
   const [requestPattern, setRequestPattern] = useState<RequestPattern>(config.period.requestPattern)
   const [granularity, setGranularity] = useState(config.period.granularity)
 
@@ -110,23 +128,31 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
     [durationInSeconds]
   )
 
-  const maxUsersString = React.useMemo(
-    () => SIMULATION_CONSTRAINTS.MAX_USERS.toLocaleString(),
-    []
-  )
-
   // Validate current form state
   const validateCurrentForm = useCallback(() => {
     const simulationPeriod = {
       duration: durationInSeconds,
       timeUnit: 'seconds' as TimeUnit, // Always validate in seconds
-      concurrentUsers,
+      totalUsers,
+      maxThinkTime,
+      thinkTimeDistribution,
+      userBehaviorPattern,
       requestPattern,
       granularity,
+      durationSeconds: durationInSeconds,
+      precision: ModelPrecision.FP16,
     }
 
     return validateSimulationPeriod(simulationPeriod)
-  }, [durationInSeconds, concurrentUsers, requestPattern, granularity])
+  }, [
+    durationInSeconds,
+    totalUsers,
+    maxThinkTime,
+    thinkTimeDistribution,
+    userBehaviorPattern,
+    requestPattern,
+    granularity,
+  ])
 
   // Store onChange in a ref to avoid dependency issues
   const onChangeRef = React.useRef(onChange)
@@ -137,9 +163,14 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
     const errors = validateSimulationPeriod({
       duration: durationInSeconds,
       timeUnit: 'seconds' as TimeUnit, // Always validate in seconds
-      concurrentUsers,
+      totalUsers,
+      maxThinkTime,
+      thinkTimeDistribution,
+      userBehaviorPattern,
       requestPattern,
       granularity,
+      durationSeconds: durationInSeconds,
+      precision: ModelPrecision.FP16,
     })
 
     setValidationErrors(errors)
@@ -149,7 +180,10 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         period: {
           duration: durationInSeconds,
           timeUnit: TimeUnit.SECONDS, // Store in seconds for consistency
-          concurrentUsers,
+          totalUsers,
+          maxThinkTime,
+          thinkTimeDistribution,
+          userBehaviorPattern,
           requestPattern,
           granularity,
           durationSeconds: durationInSeconds,
@@ -164,7 +198,10 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         period: {
           duration: durationInSeconds,
           timeUnit: TimeUnit.SECONDS,
-          concurrentUsers,
+          totalUsers,
+          maxThinkTime,
+          thinkTimeDistribution,
+          userBehaviorPattern,
           requestPattern,
           granularity,
           durationSeconds: durationInSeconds,
@@ -177,7 +214,10 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
     }
   }, [
     durationInSeconds,
-    concurrentUsers,
+    totalUsers,
+    maxThinkTime,
+    thinkTimeDistribution,
+    userBehaviorPattern,
     requestPattern,
     granularity,
     // Removed onChange from deps to prevent circular dependency
@@ -201,9 +241,30 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
     setTimeUnit(newUnit)
   }
 
-  const handleConcurrentUsersChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(event.target.value) || 0
-    setConcurrentUsers(value)
+  const handleTotalUsersChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(event.target.value) || 1
+    setTotalUsers(Math.max(1, value))
+  }
+
+  const handleMaxThinkTimeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(event.target.value) || 0
+    setMaxThinkTime(Math.max(0, value))
+  }
+
+  const handleUserBehaviorPatternChange = (event: SelectChangeEvent) => {
+    const pattern = event.target.value as UserBehaviorPattern
+    setUserBehaviorPattern(pattern)
+
+    // Auto-fill think time and distribution from preset
+    const preset = USER_BEHAVIOR_PRESETS[pattern]
+    if (preset) {
+      setMaxThinkTime(preset.maxThinkTime)
+      setThinkTimeDistribution(preset.distribution)
+    }
+  }
+
+  const handleThinkTimeDistributionChange = (event: SelectChangeEvent) => {
+    setThinkTimeDistribution(event.target.value as ThinkTimeDistribution)
   }
 
   const handleRequestPatternChange = (event: SelectChangeEvent<RequestPattern>) => {
@@ -227,14 +288,17 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
       convertFromSeconds(DEFAULT_SIMULATION_CONFIG.duration, DEFAULT_SIMULATION_CONFIG.timeUnit)
     )
     setTimeUnit(DEFAULT_SIMULATION_CONFIG.timeUnit)
-    setConcurrentUsers(DEFAULT_SIMULATION_CONFIG.concurrentUsers)
+    setTotalUsers(DEFAULT_SIMULATION_CONFIG.totalUsers)
+    setMaxThinkTime(DEFAULT_SIMULATION_CONFIG.maxThinkTime)
+    setThinkTimeDistribution(DEFAULT_SIMULATION_CONFIG.thinkTimeDistribution)
+    setUserBehaviorPattern(DEFAULT_SIMULATION_CONFIG.userBehaviorPattern)
     setRequestPattern(DEFAULT_SIMULATION_CONFIG.requestPattern)
     setGranularity(DEFAULT_SIMULATION_CONFIG.granularity)
   }
 
   // Get field-specific errors
   const getDurationErrors = () => getErrorsForField(validationErrors, 'duration')
-  const getUsersErrors = () => getErrorsForField(validationErrors, 'concurrentUsers')
+  // Removed getUsersErrors as it's no longer needed with new field structure
   const getGranularityErrors = () => getErrorsForField(validationErrors, 'granularity')
 
   const hasFormErrors = hasErrors(validationErrors)
@@ -356,35 +420,224 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
           </Box>
         </Grid>
 
-        {/* Concurrent Users Section */}
-        <Grid item xs={12} md={6}>
+        {/* Total Users Section */}
+        <Grid item xs={12} md={4}>
           <TextField
             fullWidth
-            label="Concurrent Users"
+            label="Total Users in System"
             type="number"
-            value={concurrentUsers}
-            onChange={handleConcurrentUsersChange}
+            value={totalUsers}
+            onChange={handleTotalUsersChange}
             disabled={disabled}
-            error={getUsersErrors().length > 0}
+            error={hasErrors(getErrorsForField(validationErrors, 'totalUsers'))}
             helperText={
-              getUsersErrors().length > 0
-                ? getUsersErrors()[0].message
-                : `Max ${maxUsersString} users`
+              hasErrors(getErrorsForField(validationErrors, 'totalUsers'))
+                ? formatValidationMessage(getErrorsForField(validationErrors, 'totalUsers')[0])
+                : 'Total number of users that will interact with the system'
             }
-            inputProps={{
-              min: SIMULATION_CONSTRAINTS.MIN_USERS,
-              max: SIMULATION_CONSTRAINTS.MAX_USERS,
-              step: 1,
-              'aria-label': 'Number of concurrent users',
-            }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <PeopleIcon color="action" />
+                  <PeopleIcon color="primary" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <Tooltip title="Total users who may submit requests during simulation period">
+                    <IconButton size="small">
+                      <InfoIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </InputAdornment>
               ),
             }}
+            inputProps={{
+              min: 1,
+              max: 10000,
+              step: 1,
+            }}
           />
+        </Grid>
+
+        {/* User Behavior Pattern Preset */}
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth disabled={disabled}>
+            <InputLabel>User Behavior Pattern</InputLabel>
+            <Select
+              value={userBehaviorPattern}
+              label="User Behavior Pattern"
+              onChange={handleUserBehaviorPatternChange}
+              startAdornment={
+                <InputAdornment position="start">
+                  <TrendingUpIcon color="primary" />
+                </InputAdornment>
+              }
+            >
+              {Object.entries(USER_BEHAVIOR_PRESETS).map(([key, preset]) => (
+                <MenuItem key={key} value={key}>
+                  <Box>
+                    <Typography variant="body2" fontWeight="medium">
+                      {key
+                        .replace(/_/g, ' ')
+                        .toLowerCase()
+                        .replace(/\b\w/g, l => l.toUpperCase())}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {preset.description}
+                    </Typography>
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              Choose a preset that matches your use case, or select "Custom" to configure manually
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
+        {/* Maximum Think Time */}
+        <Grid item xs={12} md={4}>
+          <TextField
+            fullWidth
+            label="Maximum Think Time"
+            type="number"
+            value={maxThinkTime}
+            onChange={handleMaxThinkTimeChange}
+            disabled={disabled || userBehaviorPattern !== UserBehaviorPattern.CUSTOM}
+            error={hasErrors(getErrorsForField(validationErrors, 'maxThinkTime'))}
+            helperText={
+              hasErrors(getErrorsForField(validationErrors, 'maxThinkTime'))
+                ? formatValidationMessage(getErrorsForField(validationErrors, 'maxThinkTime')[0])
+                : userBehaviorPattern !== UserBehaviorPattern.CUSTOM
+                  ? `Auto-set by behavior pattern: ${maxThinkTime}s`
+                  : 'Maximum seconds between user requests (0 = continuous requests)'
+            }
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <ScheduleIcon color="primary" />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <Box display="flex" alignItems="center" gap={0.5}>
+                    <Typography variant="caption" color="text.secondary">
+                      seconds
+                    </Typography>
+                    <Tooltip title="Time users spend thinking/working between requests. Higher values = lower concurrency.">
+                      <IconButton size="small">
+                        <InfoIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </InputAdornment>
+              ),
+            }}
+            inputProps={{
+              min: 0,
+              max: 3600,
+              step: 1,
+            }}
+          />
+        </Grid>
+
+        {/* Think Time Distribution */}
+        <Grid item xs={12} md={4}>
+          <FormControl
+            fullWidth
+            disabled={disabled || userBehaviorPattern !== UserBehaviorPattern.CUSTOM}
+          >
+            <InputLabel>Think Time Distribution</InputLabel>
+            <Select
+              value={thinkTimeDistribution}
+              label="Think Time Distribution"
+              onChange={handleThinkTimeDistributionChange}
+            >
+              <MenuItem value={ThinkTimeDistribution.BELL_CURVE}>
+                <Box>
+                  <Typography variant="body2">Bell Curve</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Most natural - average think times with some variation
+                  </Typography>
+                </Box>
+              </MenuItem>
+              <MenuItem value={ThinkTimeDistribution.EXPONENTIAL}>
+                <Box>
+                  <Typography variant="body2">Exponential</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Many quick requests, few long delays (API-like)
+                  </Typography>
+                </Box>
+              </MenuItem>
+              <MenuItem value={ThinkTimeDistribution.UNIFORM}>
+                <Box>
+                  <Typography variant="body2">Uniform</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Consistent pacing - equal probability for all think times
+                  </Typography>
+                </Box>
+              </MenuItem>
+              <MenuItem value={ThinkTimeDistribution.LOGNORMAL}>
+                <Box>
+                  <Typography variant="body2">Log-Normal</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Human-like behavior with occasional long pauses
+                  </Typography>
+                </Box>
+              </MenuItem>
+            </Select>
+            <FormHelperText>
+              {userBehaviorPattern !== UserBehaviorPattern.CUSTOM
+                ? `Auto-set by behavior pattern: ${thinkTimeDistribution.replace('_', ' ')}`
+                : 'Statistical pattern for think time generation'}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
+        {/* Show Derived Concurrency Estimates */}
+        <Grid item xs={12}>
+          <Alert severity="info" icon={<TrendingUpIcon />} sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Estimated Concurrency Levels
+            </Typography>
+            <Box display="flex" gap={3} flexWrap="wrap">
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Peak Concurrent Requests:
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  ~
+                  {estimatePeakConcurrency(
+                    totalUsers,
+                    maxThinkTime,
+                    Math.max(1, Math.floor(100 * 0.01)), // average request duration estimate
+                    thinkTimeDistribution
+                  )}{' '}
+                  users
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Total User Population:
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  {totalUsers} users
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Think Time Range:
+                </Typography>
+                <Typography variant="body2" fontWeight="medium">
+                  0 - {maxThinkTime}s
+                </Typography>
+              </Box>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              💡 Peak concurrency is derived from actual user behavior simulation, not a fixed
+              input.
+            </Typography>
+          </Alert>
         </Grid>
 
         {/* Request Pattern Section */}
@@ -434,10 +687,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
             }
             inputProps={{
               min: SIMULATION_CONSTRAINTS.MIN_GRANULARITY,
-              max: Math.min(
-                SIMULATION_CONSTRAINTS.MAX_GRANULARITY,
-                durationInSeconds
-              ),
+              max: Math.min(SIMULATION_CONSTRAINTS.MAX_GRANULARITY, durationInSeconds),
               step: 1,
               'aria-label': 'Simulation granularity in seconds',
             }}
@@ -456,7 +706,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
           />
           <Chip
             size="small"
-            label={`${concurrentUsers} users`}
+            label={`${totalUsers} total users`}
             color="secondary"
             variant="outlined"
           />

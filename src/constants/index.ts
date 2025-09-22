@@ -1,7 +1,14 @@
 // VRAM Magic: Application Constants
 // This file contains all application constants, default values, and configuration
 
-import { ModelPrecision, TimeUnit, RequestPattern, WorkloadCategory } from '../types'
+import {
+  ModelPrecision,
+  TimeUnit,
+  RequestPattern,
+  WorkloadCategory,
+  ThinkTimeDistribution,
+  UserBehaviorPattern,
+} from '../types'
 
 // Now using proper enum imports from ../types
 
@@ -123,9 +130,17 @@ export const CHART_COLORS = {
 export const DEFAULT_SIMULATION_CONFIG = {
   duration: 3600, // 1 hour
   timeUnit: TimeUnit.SECONDS,
-  concurrentUsers: 10,
+  totalUsers: 100, // NEW: was concurrentUsers: 10
+  maxThinkTime: 30, // NEW: 30 seconds default
+  thinkTimeDistribution: ThinkTimeDistribution.BELL_CURVE, // NEW: Most natural
+  userBehaviorPattern: UserBehaviorPattern.INTERACTIVE_CHAT, // NEW: Common use case
   requestPattern: RequestPattern.UNIFORM,
   granularity: 60, // 1 minute
+  precision: ModelPrecision.FP16,
+  durationSeconds: 3600,
+  // Derived values (will be calculated)
+  derivedPeakConcurrency: undefined,
+  derivedAverageConcurrency: undefined,
 } as const
 
 export const DEFAULT_WORKLOAD_SLOT = {
@@ -195,6 +210,72 @@ export const PERFORMANCE = {
 } as const
 
 // ============================================================================
+// User Behavior and Think Time Constants
+// ============================================================================
+
+export const USER_BEHAVIOR_PRESETS = {
+  [UserBehaviorPattern.INTERACTIVE_CHAT]: {
+    maxThinkTime: 45,
+    distribution: ThinkTimeDistribution.LOGNORMAL,
+    description: 'Human chat interactions with natural pauses',
+    examples: ['Customer support', 'Personal assistant', 'Interactive tutoring'],
+  },
+  [UserBehaviorPattern.API_SERVICE]: {
+    maxThinkTime: 0.1,
+    distribution: ThinkTimeDistribution.EXPONENTIAL,
+    description: 'Automated API calls with minimal delays',
+    examples: ['Microservices', 'Batch processing', 'Real-time analysis'],
+  },
+  [UserBehaviorPattern.CONTENT_CREATION]: {
+    maxThinkTime: 120,
+    distribution: ThinkTimeDistribution.BELL_CURVE,
+    description: 'Creative workflows with longer contemplation periods',
+    examples: ['Writing assistance', 'Code generation', 'Creative brainstorming'],
+  },
+  [UserBehaviorPattern.DATA_ANALYSIS]: {
+    maxThinkTime: 30,
+    distribution: ThinkTimeDistribution.UNIFORM,
+    description: 'Analytical queries with consistent pacing',
+    examples: ['Business intelligence', 'Research analysis', 'Report generation'],
+  },
+  [UserBehaviorPattern.CODE_ASSISTANCE]: {
+    maxThinkTime: 60,
+    distribution: ThinkTimeDistribution.EXPONENTIAL,
+    description: 'Development workflows with coding pauses',
+    examples: ['IDE integration', 'Code review', 'Debug assistance'],
+  },
+  [UserBehaviorPattern.CUSTOMER_SUPPORT]: {
+    maxThinkTime: 20,
+    distribution: ThinkTimeDistribution.BELL_CURVE,
+    description: 'Support interactions with moderate think times',
+    examples: ['Help desk', 'Technical support', 'FAQ systems'],
+  },
+  [UserBehaviorPattern.RESEARCH_QUERIES]: {
+    maxThinkTime: 90,
+    distribution: ThinkTimeDistribution.LOGNORMAL,
+    description: 'Research workflows with variable exploration patterns',
+    examples: ['Academic research', 'Literature review', 'Knowledge discovery'],
+  },
+  [UserBehaviorPattern.CUSTOM]: {
+    maxThinkTime: 30,
+    distribution: ThinkTimeDistribution.BELL_CURVE,
+    description: 'Custom configuration - set your own think time and distribution',
+    examples: ['Custom use case', 'Special requirements', 'Manual configuration'],
+  },
+} as const
+
+export const THINK_TIME_CONSTRAINTS = {
+  MIN_THINK_TIME: 0,
+  MAX_THINK_TIME: 3600, // 1 hour
+  DEFAULT_THINK_TIME: 30,
+  USER_POPULATION_LIMITS: {
+    MIN_USERS: 1,
+    MAX_USERS: 10000,
+    DEFAULT_USERS: 100,
+  },
+} as const
+
+// ============================================================================
 // GPU Recommendations
 // ============================================================================
 
@@ -244,6 +325,8 @@ export const CONSTANTS = {
   BREAKPOINTS,
   VALIDATION_RULES,
   PERFORMANCE,
+  USER_BEHAVIOR_PRESETS,
+  THINK_TIME_CONSTRAINTS,
   GPU_TIERS,
 } as const
 

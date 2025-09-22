@@ -298,8 +298,9 @@ const WorkloadSlotComponent: React.FC<WorkloadSlotComponentProps> = ({
       sx={{
         p: 2,
         minHeight: 120,
-        border: `2px dashed ${isOver && canDrop ? theme.palette.primary.main : theme.palette.divider
-          }`,
+        border: `2px dashed ${
+          isOver && canDrop ? theme.palette.primary.main : theme.palette.divider
+        }`,
         backgroundColor:
           isOver && canDrop
             ? alpha(theme.palette.primary.main, 0.05)
@@ -364,7 +365,6 @@ const WorkloadSlotComponent: React.FC<WorkloadSlotComponentProps> = ({
             <Typography variant="subtitle1" fontWeight="bold">
               {slot.workload.name}
             </Typography>
-
           </Box>
           <Box display="flex" gap={1} flexWrap="wrap" sx={{ ml: 2 }}>
             <Chip
@@ -391,7 +391,6 @@ const WorkloadSlotComponent: React.FC<WorkloadSlotComponentProps> = ({
               label="Active in simulation"
             />
           </Box>
-
 
           {slot.isActive && (
             <Box mt={2}>
@@ -709,10 +708,10 @@ const WorkloadConfigurator: React.FC<WorkloadConfiguratorProps> = ({
     (slotIndex: number) => {
       if (slotIndex === 0) return
       const newSlots = [...workloadSlots]
-        ;[newSlots[slotIndex], newSlots[slotIndex - 1]] = [
-          newSlots[slotIndex - 1],
-          newSlots[slotIndex],
-        ]
+      ;[newSlots[slotIndex], newSlots[slotIndex - 1]] = [
+        newSlots[slotIndex - 1],
+        newSlots[slotIndex],
+      ]
       // Update order properties (1-based indexing: array index + 1)
       newSlots[slotIndex].order = slotIndex + 1
       newSlots[slotIndex - 1].order = slotIndex
@@ -725,10 +724,10 @@ const WorkloadConfigurator: React.FC<WorkloadConfiguratorProps> = ({
     (slotIndex: number) => {
       if (slotIndex === workloadSlots.length - 1) return
       const newSlots = [...workloadSlots]
-        ;[newSlots[slotIndex], newSlots[slotIndex + 1]] = [
-          newSlots[slotIndex + 1],
-          newSlots[slotIndex],
-        ]
+      ;[newSlots[slotIndex], newSlots[slotIndex + 1]] = [
+        newSlots[slotIndex + 1],
+        newSlots[slotIndex],
+      ]
       // Update order properties (1-based indexing: array index + 1)
       newSlots[slotIndex].order = slotIndex + 1
       newSlots[slotIndex + 1].order = slotIndex + 2
@@ -979,7 +978,7 @@ const WorkloadConfigurator: React.FC<WorkloadConfiguratorProps> = ({
               </Alert>
             )}
 
-            <Box sx={{ maxHeight: 600, overflowY: 'auto'}}>
+            <Box sx={{ maxHeight: 600, overflowY: 'auto' }}>
               {Object.entries(workloadsByCategory).map(([category, categoryWorkloads]) => {
                 if (categoryWorkloads.length === 0) return null
 

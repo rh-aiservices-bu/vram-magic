@@ -55,51 +55,72 @@ function UIProvider({ children }: UIProviderProps) {
   )
 
   // Action implementations - memoized to prevent recreation on every render
-  const setLoading = useCallback((loading: boolean) => {
-    dispatch(actionCreators.setLoading(loading))
-  }, [dispatch])
+  const setLoading = useCallback(
+    (loading: boolean) => {
+      dispatch(actionCreators.setLoading(loading))
+    },
+    [dispatch]
+  )
 
-  const setError = useCallback((error: string | null) => {
-    dispatch(actionCreators.setError(error))
-  }, [dispatch])
+  const setError = useCallback(
+    (error: string | null) => {
+      dispatch(actionCreators.setError(error))
+    },
+    [dispatch]
+  )
 
   const clearError = useCallback(() => {
     dispatch(actionCreators.setError(null))
   }, [dispatch])
 
-  const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp'>) => {
-    const fullNotification: Notification = {
-      ...notification,
-      id: `notification-${crypto.randomUUID()}`,
-      timestamp: Date.now(),
-    }
-    dispatch(actionCreators.addNotification(fullNotification))
-  }, [dispatch])
+  const addNotification = useCallback(
+    (notification: Omit<Notification, 'id' | 'timestamp'>) => {
+      const fullNotification: Notification = {
+        ...notification,
+        id: `notification-${crypto.randomUUID()}`,
+        timestamp: Date.now(),
+      }
+      dispatch(actionCreators.addNotification(fullNotification))
+    },
+    [dispatch]
+  )
 
-  const removeNotification = useCallback((id: string) => {
-    dispatch(actionCreators.removeNotification(id))
-  }, [dispatch])
+  const removeNotification = useCallback(
+    (id: string) => {
+      dispatch(actionCreators.removeNotification(id))
+    },
+    [dispatch]
+  )
 
   const clearNotifications = useCallback(() => {
     dispatch(actionCreators.clearNotifications())
   }, [dispatch])
 
-  const updatePreferences = useCallback((preferences: Partial<UserPreferences>) => {
-    dispatch(actionCreators.updatePreferences(preferences))
-  }, [dispatch])
+  const updatePreferences = useCallback(
+    (preferences: Partial<UserPreferences>) => {
+      dispatch(actionCreators.updatePreferences(preferences))
+    },
+    [dispatch]
+  )
 
   const toggleTheme = useCallback(() => {
     const newTheme = isDarkMode ? 'light' : 'dark'
     updatePreferences({ theme: newTheme })
   }, [isDarkMode, updatePreferences])
 
-  const setTheme = useCallback((theme: 'light' | 'dark' | 'auto') => {
-    updatePreferences({ theme })
-  }, [updatePreferences])
+  const setTheme = useCallback(
+    (theme: 'light' | 'dark' | 'auto') => {
+      updatePreferences({ theme })
+    },
+    [updatePreferences]
+  )
 
-  const setChartType = useCallback((chartType: 'area' | 'bar') => {
-    updatePreferences({ chartType })
-  }, [updatePreferences])
+  const setChartType = useCallback(
+    (chartType: 'area' | 'bar') => {
+      updatePreferences({ chartType })
+    },
+    [updatePreferences]
+  )
 
   const toggleTooltips = useCallback(() => {
     updatePreferences({ showTooltips: !ui.preferences.showTooltips })
@@ -121,91 +142,106 @@ function UIProvider({ children }: UIProviderProps) {
   }, [updatePreferences, ui.preferences.accessibilityMode, addNotification])
 
   // Convenience methods for common notifications
-  const showSuccess = useCallback((message: string, autoClose: boolean = true) => {
-    addNotification({
-      type: 'success',
-      message,
-      autoClose,
-    })
-  }, [addNotification])
+  const showSuccess = useCallback(
+    (message: string, autoClose: boolean = true) => {
+      addNotification({
+        type: 'success',
+        message,
+        autoClose,
+      })
+    },
+    [addNotification]
+  )
 
-  const showError = useCallback((message: string, autoClose: boolean = false) => {
-    addNotification({
-      type: 'error',
-      message,
-      autoClose,
-    })
-  }, [addNotification])
+  const showError = useCallback(
+    (message: string, autoClose: boolean = false) => {
+      addNotification({
+        type: 'error',
+        message,
+        autoClose,
+      })
+    },
+    [addNotification]
+  )
 
-  const showWarning = useCallback((message: string, autoClose: boolean = true) => {
-    addNotification({
-      type: 'warning',
-      message,
-      autoClose,
-    })
-  }, [addNotification])
+  const showWarning = useCallback(
+    (message: string, autoClose: boolean = true) => {
+      addNotification({
+        type: 'warning',
+        message,
+        autoClose,
+      })
+    },
+    [addNotification]
+  )
 
-  const showInfo = useCallback((message: string, autoClose: boolean = true) => {
-    addNotification({
-      type: 'info',
-      message,
-      autoClose,
-    })
-  }, [addNotification])
+  const showInfo = useCallback(
+    (message: string, autoClose: boolean = true) => {
+      addNotification({
+        type: 'info',
+        message,
+        autoClose,
+      })
+    },
+    [addNotification]
+  )
 
-  const value: UIContextValue = useMemo(() => ({
-    // State
-    isLoading: ui.loading,
-    error: ui.error,
-    notifications: ui.notifications,
-    preferences: ui.preferences,
+  const value: UIContextValue = useMemo(
+    () => ({
+      // State
+      isLoading: ui.loading,
+      error: ui.error,
+      notifications: ui.notifications,
+      preferences: ui.preferences,
 
-    // Theme
-    theme,
-    isDarkMode,
+      // Theme
+      theme,
+      isDarkMode,
 
-    // Actions
-    setLoading,
-    setError,
-    clearError,
-    addNotification,
-    removeNotification,
-    clearNotifications,
-    updatePreferences,
-    toggleTheme,
-    setTheme,
-    setChartType,
-    toggleTooltips,
-    toggleAnimations,
-    toggleAccessibilityMode,
-    showSuccess,
-    showError,
-    showWarning,
-    showInfo,
-  }), [
-    ui.loading,
-    ui.error,
-    ui.preferences,
-    theme,
-    isDarkMode,
-    setLoading,
-    setError,
-    clearError,
-    addNotification,
-    removeNotification,
-    clearNotifications,
-    updatePreferences,
-    toggleTheme,
-    setTheme,
-    setChartType,
-    toggleTooltips,
-    toggleAnimations,
-    toggleAccessibilityMode,
-    showSuccess,
-    showError,
-    showWarning,
-    showInfo,
-  ])
+      // Actions
+      setLoading,
+      setError,
+      clearError,
+      addNotification,
+      removeNotification,
+      clearNotifications,
+      updatePreferences,
+      toggleTheme,
+      setTheme,
+      setChartType,
+      toggleTooltips,
+      toggleAnimations,
+      toggleAccessibilityMode,
+      showSuccess,
+      showError,
+      showWarning,
+      showInfo,
+    }),
+    [
+      ui.loading,
+      ui.error,
+      ui.preferences,
+      theme,
+      isDarkMode,
+      setLoading,
+      setError,
+      clearError,
+      addNotification,
+      removeNotification,
+      clearNotifications,
+      updatePreferences,
+      toggleTheme,
+      setTheme,
+      setChartType,
+      toggleTooltips,
+      toggleAnimations,
+      toggleAccessibilityMode,
+      showSuccess,
+      showError,
+      showWarning,
+      showInfo,
+    ]
+  )
 
   return <UIContext.Provider value={value}>{children}</UIContext.Provider>
 }

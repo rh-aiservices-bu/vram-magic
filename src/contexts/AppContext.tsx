@@ -17,7 +17,10 @@ const defaultSimulationConfig: SimulationConfig = {
   period: {
     duration: 60,
     timeUnit: 'minutes' as TimeUnit,
-    concurrentUsers: 10,
+    totalUsers: 100,
+    maxThinkTime: 30,
+    thinkTimeDistribution: 'bell_curve' as any,
+    userBehaviorPattern: 'interactive_chat' as any,
     requestPattern: 'uniform' as RequestPattern,
     granularity: 60,
     durationSeconds: 3600,

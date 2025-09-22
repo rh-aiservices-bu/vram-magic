@@ -16,18 +16,18 @@ export interface ModelArchitecture {
   layers: number
   hiddenSize: number
   attentionHeads: number
-  kvHeads?: number  // NEW: Number of KV heads (different from attention heads for GQA)
-  headDim?: number  // NEW: Dimension per attention head
-  useGQA?: boolean  // NEW: Flag indicating if model uses Grouped Query Attention
+  kvHeads?: number // NEW: Number of KV heads (different from attention heads for GQA)
+  headDim?: number // NEW: Dimension per attention head
+  useGQA?: boolean // NEW: Flag indicating if model uses Grouped Query Attention
   vocabularySize: number
   maxSequenceLength: number
 }
 
 export interface VLLMOptimizations {
-  blockSize: number           // KV-cache block size in tokens (typically 16)
-  memoryPoolOverhead: number  // Pre-allocation overhead (typically 0.15)
+  blockSize: number // KV-cache block size in tokens (typically 16)
+  memoryPoolOverhead: number // Pre-allocation overhead (typically 0.15)
   continuousBatching: boolean // Supports continuous batching
-  pagedAttention: boolean     // Uses PagedAttention
+  pagedAttention: boolean // Uses PagedAttention
   cudaGraphSupported: boolean // CUDA graph optimization support
   flashAttentionCompatible: boolean // Flash Attention compatibility
 }
@@ -41,17 +41,19 @@ export interface VRAMRequirements {
 
 export interface PerformanceMetrics {
   gpuType: string
-  baseTokensPerSecond?: number      // NEW: Rename from tokensPerSecond
-  tokensPerSecond?: number          // Keep for backward compatibility
-  workloadMultipliers?: {            // NEW: Workload-specific performance
+  baseTokensPerSecond?: number // NEW: Rename from tokensPerSecond
+  tokensPerSecond?: number // Keep for backward compatibility
+  workloadMultipliers?: {
+    // NEW: Workload-specific performance
     chat?: number
     code?: number
     rag?: number
     summarization?: number
     translation?: number
   }
-  batchScaling?: {                   // NEW: Batch size performance scaling
-    [key: string]: number            // e.g., "1": 0.4, "4": 0.85, "8": 1.0
+  batchScaling?: {
+    // NEW: Batch size performance scaling
+    [key: string]: number // e.g., "1": 0.4, "4": 0.85, "8": 1.0
   }
   batchSize: number
   powerConsumption: number
@@ -79,7 +81,7 @@ export interface Model {
   precision: ModelPrecision
   architecture: ModelArchitecture
   vramRequirements: VRAMRequirements
-  vllmOptimizations?: VLLMOptimizations  // NEW
+  vllmOptimizations?: VLLMOptimizations // NEW
   performance: PerformanceMetrics[]
   metadata: ModelMetadata
 }
@@ -182,6 +184,25 @@ export enum RequestDistribution {
   LEGAL_PATTERN = 'legal_pattern',
 }
 
+export enum ThinkTimeDistribution {
+  BELL_CURVE = 'bell_curve',
+  EXPONENTIAL = 'exponential',
+  UNIFORM = 'uniform',
+  POISSON = 'poisson',
+  LOGNORMAL = 'lognormal',
+}
+
+export enum UserBehaviorPattern {
+  INTERACTIVE_CHAT = 'interactive_chat',
+  API_SERVICE = 'api_service',
+  CONTENT_CREATION = 'content_creation',
+  DATA_ANALYSIS = 'data_analysis',
+  CODE_ASSISTANCE = 'code_assistance',
+  CUSTOMER_SUPPORT = 'customer_support',
+  RESEARCH_QUERIES = 'research_queries',
+  CUSTOM = 'custom',
+}
+
 export interface GPURecommendation {
   gpu: string
   quantity: number
@@ -197,11 +218,18 @@ export interface GPURecommendation {
 export interface SimulationPeriod {
   duration: number
   timeUnit: TimeUnit
-  concurrentUsers: number
+  totalUsers: number
+  maxThinkTime: number
+  thinkTimeDistribution: ThinkTimeDistribution
+  userBehaviorPattern: UserBehaviorPattern
   requestPattern: RequestPattern
   granularity: number
   durationSeconds: number
   precision: ModelPrecision
+
+  // Derived values (calculated, not input)
+  derivedPeakConcurrency?: number
+  derivedAverageConcurrency?: number
 }
 
 export interface ActiveRequest {
@@ -241,6 +269,32 @@ export interface VRAMUsagePoint {
   activeRequests: ActiveRequest[]
 }
 
+export interface UserSession {
+  userId: number
+  nextRequestTime: number
+  lastRequestEnd: number
+  totalRequests: number
+  currentThinkTime: number
+  isProcessingRequest: boolean
+}
+
+export interface RequestEvent {
+  userId: number
+  requestId: string
+  startTime: number
+  endTime: number
+  workloadId: string
+  inputTokens: number
+  outputTokens: number
+}
+
+export interface ConcurrencySnapshot {
+  timestamp: number
+  activeUsers: number
+  queuedUsers: number
+  processingRequests: RequestEvent[]
+}
+
 // ============================================================================
 // Application State Types
 // ============================================================================
@@ -264,6 +318,7 @@ export interface SimulationResults {
   recommendations: string[]
   warnings: string[]
   calculatedAt: number
+  simulationPeriod?: SimulationPeriod
 }
 
 export interface Notification {
