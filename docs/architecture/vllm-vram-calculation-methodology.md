@@ -206,42 +206,103 @@ def calculate_vllm_vram(model, sequence_length, batch_size, precision_bytes):
 
     return total_vram
 
-# Example usage with stub model object
+# Flexible ModelStub for different model configurations
 class ModelStub:
-    def __init__(self):
-        self.parameters = 7_240_000_000  # 7.24B parameters (Mistral 7B)
-        self.overhead_factor = 1.12      # Model loading overhead
+    def __init__(self,
+                 parameters=7_240_000_000,      # Total model parameters
+                 overhead_factor=1.12,          # Model loading overhead
+                 layers=32,                     # Number of transformer layers
+                 hidden_size=4096,              # Hidden dimension size
+                 attention_heads=32,            # Number of attention heads
+                 kv_heads=8,                    # Number of KV heads (None for standard MHA)
+                 head_dim=None,                 # Dimension per head (None to calculate)
+                 block_size=16,                 # vLLM block size
+                 memory_pool_overhead=0.15,     # vLLM memory pool overhead
+                 activation_multiplier=1.4):    # Activation scaling factor
+
+        self.parameters = parameters
+        self.overhead_factor = overhead_factor
 
         # Architecture configuration
         self.architecture = type('Architecture', (), {
-            'layers': 32,                # Number of transformer layers
-            'hidden_size': 4096,         # Hidden dimension size
-            'attention_heads': 32,       # Number of attention heads
-            'kv_heads': 8,              # Number of KV heads (GQA: fewer than attention heads)
-            'head_dim': 128             # Dimension per attention head
+            'layers': layers,
+            'hidden_size': hidden_size,
+            'attention_heads': attention_heads,
+            'kv_heads': kv_heads,              # Can be None for standard MHA
+            'head_dim': head_dim               # Can be None to auto-calculate
         })()
 
         # vLLM optimization settings
         self.vllm_optimizations = type('VLLMOptimizations', (), {
-            'block_size': 16,                    # Tokens per memory block
-            'memory_pool_overhead': 0.15         # Pre-allocation overhead (15%)
+            'block_size': block_size,
+            'memory_pool_overhead': memory_pool_overhead
         })()
 
         # VRAM requirement settings
         self.vram_requirements = type('VRAMRequirements', (), {
-            'activation_multiplier': 1.4         # Inference activation scaling
+            'activation_multiplier': activation_multiplier
         })()
 
-# Example calculation
-model = ModelStub()
-sequence_length = 500        # Total tokens (input + output)
-batch_size = 1              # Number of concurrent requests
-precision_bytes = 2         # fp16 precision (2 bytes per parameter)
+# Example 1: Default Mistral 7B with GQA
+model_mistral = ModelStub()
+print("Mistral 7B (GQA enabled):")
+total_vram_bytes = calculate_vllm_vram(model_mistral, 500, 1, 2)
+print(f"VRAM required: {total_vram_bytes / (1024**3):.2f} GB\n")
 
-total_vram_bytes = calculate_vllm_vram(model, sequence_length, batch_size, precision_bytes)
-total_vram_gb = total_vram_bytes / (1024**3)
+# Example 2: Llama 2 7B without GQA (standard MHA)
+model_llama2 = ModelStub(
+    parameters=7_000_000_000,    # 7B parameters
+    overhead_factor=1.15,        # Slightly different overhead
+    kv_heads=None,              # No GQA - will use attention_heads
+    head_dim=None,              # Will be calculated as hidden_size/attention_heads
+    activation_multiplier=1.5    # Different activation scaling
+)
+print("Llama 2 7B (standard MHA):")
+total_vram_bytes = calculate_vllm_vram(model_llama2, 500, 1, 2)
+print(f"VRAM required: {total_vram_bytes / (1024**3):.2f} GB\n")
 
-print(f"Total VRAM required: {total_vram_gb:.2f} GB")
+# Example 3: Custom 13B model with specific GQA configuration
+model_custom = ModelStub(
+    parameters=13_000_000_000,   # 13B parameters
+    layers=40,                   # More layers
+    hidden_size=5120,            # Larger hidden size
+    attention_heads=40,          # More attention heads
+    kv_heads=8,                 # GQA: fewer KV heads
+    head_dim=128,               # Explicit head dimension
+    activation_multiplier=1.6    # Higher activation scaling
+)
+print("Custom 13B model with GQA:")
+total_vram_bytes = calculate_vllm_vram(model_custom, 1000, 4, 2)
+print(f"VRAM required: {total_vram_bytes / (1024**3):.2f} GB")
+```
+
+### Handling Optional Values
+
+The `calculate_vllm_vram` function automatically handles missing/optional values:
+
+```python
+# These lines in the function handle optional values:
+kv_heads = model.architecture.kv_heads or model.architecture.attention_heads
+head_dim = model.architecture.head_dim or (model.architecture.hidden_size / model.architecture.attention_heads)
+```
+
+**How it works:**
+
+1. **kv_heads = None**: When `kv_heads` is `None` (standard Multi-Head Attention), the function uses `attention_heads` instead. This means no GQA optimization.
+
+2. **head_dim = None**: When `head_dim` is `None`, it's calculated as `hidden_size ÷ attention_heads`, which is the standard formula for head dimension.
+
+**To customize your model:**
+
+```python
+# Standard MHA model (like Llama 2):
+model = ModelStub(kv_heads=None, head_dim=None)
+
+# GQA model with auto-calculated head_dim:
+model = ModelStub(kv_heads=8, head_dim=None)
+
+# Fully specified model:
+model = ModelStub(kv_heads=8, head_dim=128)
 ```
 
 ### Key Formula Components
