@@ -41,8 +41,6 @@ However, KV-Cache calculations now vary significantly based on the attention mec
 
 ### 1. Base Model Memory
 
-Unchanged from v1.0:
-
 ```text
 Base Memory = Parameters × Precision (bytes) × Overhead Factor
 ```
@@ -98,7 +96,7 @@ Remains similar but accounts for attention-specific optimizations.
 
 ## Standard Optimizations (GQA)
 
-Covered in v1.0, Grouped Query Attention reduces KV heads while maintaining query heads:
+Grouped Query Attention reduces KV heads while maintaining query heads:
 
 ```python
 # GQA KV Cache Formula
