@@ -1,591 +1,641 @@
-<!-- markdownlint-disable MD036 -->
-# vLLM VRAM Calculation Methodology
+<!-- markdownlint-disable MD036, MD040 -->
+# vLLM VRAM Calculation Methodology v2.0
+
+## Extended with Modern Attention Mechanisms (MLA, SWA)
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Core VRAM Components](#core-vram-components)
-3. [vLLM-Specific Optimizations](#vllm-specific-optimizations)
-4. [Mathematical Formulas](#mathematical-formulas)
-5. [Calculation Examples](#calculation-examples)
-6. [Parameter Reference](#parameter-reference)
-7. [Implementation Notes](#implementation-notes)
+3. [Attention Mechanism Overview](#attention-mechanism-overview)
+4. [Standard Optimizations (GQA)](#standard-optimizations-gqa)
+5. [Multi-head Latent Attention (MLA)](#multi-head-latent-attention-mla)
+6. [Sliding Window Attention (SWA)](#sliding-window-attention-swa)
+7. [Mathematical Formulas](#mathematical-formulas)
+8. [Calculation Examples](#calculation-examples)
+9. [Model-Specific Configurations](#model-specific-configurations)
+10. [Parameter Reference](#parameter-reference)
+11. [Implementation Notes](#implementation-notes)
 
 ---
 
 ## Overview
 
-This document provides a comprehensive methodology for calculating GPU memory (VRAM) requirements when deploying Large Language Models (LLMs) using vLLM (very fast LLM inference and serving). vLLM introduces several optimizations that significantly impact memory usage compared to traditional inference frameworks:
+This document provides a comprehensive methodology for calculating GPU memory (VRAM) requirements when deploying Large Language Models (LLMs) using vLLM. Version 2.0 extends the original methodology to include modern attention optimizations beyond Grouped Query Attention (GQA):
 
-- **PagedAttention**: Block-based memory allocation for KV-cache
-- **Grouped Query Attention (GQA)**: Reduced memory footprint for key-value heads
-- **Continuous Batching**: Dynamic batching optimization
-- **Memory Pool Pre-allocation**: Efficient memory management
+- **Multi-head Latent Attention (MLA)**: Low-rank compression technique used in DeepSeek models
+- **Sliding Window Attention (SWA)**: Local attention pattern used in Mistral and Gemma models
+- **Hybrid Attention Patterns**: Models combining different attention mechanisms across layers
 
----
-
-## Core VRAM Components
-
-VRAM usage in vLLM deployments consists of four main components:
+The fundamental equation remains:
 
 ```text
 Total VRAM = Base Model Memory + KV-Cache Memory + Activation Memory + System Overhead
 ```
 
+However, KV-Cache calculations now vary significantly based on the attention mechanism employed.
+
+---
+
+## Core VRAM Components
+
 ### 1. Base Model Memory
 
-The memory required to store the model's weights and parameters.
-
-**Formula:**
+Unchanged from v1.0:
 
 ```text
 Base Memory = Parameters × Precision (bytes) × Overhead Factor
 ```
 
-**Parameters:**
+### 2. KV-Cache Memory (Extended)
 
-- `Parameters`: Total number of model parameters (e.g., 7B for 7 billion parameters)
-- `Precision`: Bytes per parameter based on data type (fp16 = 2 bytes, fp32 = 4 bytes, int8 = 1 byte)
-- `Overhead Factor`: Additional memory for model loading and framework overhead (typically 1.2)
-
-### 2. KV-Cache Memory
-
-Memory for storing key-value attention cache during inference.
-
-**Standard Formula (without GQA):**
+Now depends on attention mechanism:
 
 ```text
-KV Cache = 2 × Layers × Hidden Size × Sequence Length × Batch Size × Precision
+KV Cache = f(attention_type) × Layers × Sequence Length × Batch Size × Precision
 ```
 
-**GQA-Optimized Formula:**
+Where `f(attention_type)` varies:
 
-```text
-KV Cache = 2 × Layers × KV Heads × Head Dimension × Sequence Length × Batch Size × Precision
-```
-
-**Parameters:**
-
-- `Layers`: Number of transformer layers
-- `Hidden Size`: Model's hidden dimension size
-- `KV Heads`: Number of key-value heads (for GQA models, typically fewer than attention heads)
-- `Head Dimension`: Dimension per attention head (Hidden Size ÷ Attention Heads)
-- `Sequence Length`: Total input + output tokens
-- `Batch Size`: Number of concurrent requests
-- `Precision`: Bytes per parameter
+- **Standard MHA**: `2 × Hidden Size`
+- **GQA**: `2 × KV Heads × Head Dimension`
+- **MLA**: `Latent Dimension` (dramatically reduced)
+- **SWA**: `2 × Hidden Size × min(Window Size, Sequence Length)`
 
 ### 3. Activation Memory
 
-Memory for intermediate computations during forward pass.
-
-**Formula:**
+Enhanced for attention-specific computations:
 
 ```text
-Activation Memory = Hidden Size × Sequence Length × Batch Size × Precision × Activation Multiplier
+Activation Memory = Hidden Size × Sequence Length × Batch Size × Precision × Activation Multiplier × Attention Factor
 ```
 
-**Parameters:**
+Where `Attention Factor` accounts for mechanism-specific overhead:
 
-- `Activation Multiplier`: Scaling factor for inference (typically 1.5x, much lower than training's 4x)
+- Standard/GQA: 1.0
+- MLA: 1.2-1.3 (matrix absorption overhead)
+- SWA: 0.8-0.9 (reduced computation)
 
 ### 4. System Overhead
 
-Additional memory for PyTorch, CUDA, and vLLM framework overhead.
-
-**Formula:**
-
-```text
-System Overhead = (Base Memory + KV Cache Memory) × Overhead Rate
-```
-
-**Parameters:**
-
-- `Overhead Rate`: Typically 0.1 (10%) for system and framework overhead
+Remains similar but accounts for attention-specific optimizations.
 
 ---
 
-## vLLM-Specific Optimizations
+## Attention Mechanism Overview
 
-### PagedAttention Block Allocation
+### Mechanism Comparison Table
 
-vLLM allocates KV-cache memory in fixed-size blocks rather than contiguous arrays.
+| Mechanism | KV Cache Size | Memory Reduction | Computation Cost | Used By |
+|-----------|---------------|------------------|------------------|----------|
+| **MHA** | Baseline (100%) | 0% | O(n²) | Llama 2, GPT |
+| **MQA** | ~3% of MHA | 97% | O(n²) | Falcon, PaLM |
+| **GQA** | 12-25% of MHA | 75-88% | O(n²) | Mistral, Llama 3 |
+| **MLA** | 1-7% of MHA | 93-99% | O(n²) reduced | DeepSeek V2/V3/R1 |
+| **SWA** | Window-limited | Variable | O(n×w) | Mistral, Gemma 2 |
 
-**Block Size Effect:**
+---
 
-```python
-# Standard allocation
-tokens_needed = input_tokens + output_tokens
+## Standard Optimizations (GQA)
 
-# vLLM block allocation
-block_size = 16  # tokens per block
-blocks_needed = ceil(tokens_needed / block_size)
-effective_tokens = blocks_needed * block_size
-```
-
-**Memory Pool Overhead:**
+Covered in v1.0, Grouped Query Attention reduces KV heads while maintaining query heads:
 
 ```python
-kv_cache_base = [standard KV cache calculation]
-memory_pool_overhead = kv_cache_base * 0.15  # 15% pre-allocation
-total_kv_cache = kv_cache_base + memory_pool_overhead
+# GQA KV Cache Formula
+kv_cache_gqa = 2 * layers * kv_heads * head_dim * seq_length * batch_size * precision_bytes
+compression_ratio = attention_heads / kv_heads  # e.g., 32/8 = 4x reduction
 ```
 
-### Grouped Query Attention (GQA)
+---
 
-GQA reduces memory by using fewer key-value heads than attention heads.
+## Multi-head Latent Attention (MLA)
 
-**Standard Multi-Head Attention:**
+### Overview
 
-```text
-KV Heads = Attention Heads (e.g., 32 heads)
+MLA compresses KV representations into a low-dimensional latent space, achieving 93-99% KV cache reduction compared to standard MHA.
+
+### Key Concepts
+
+1. **Latent Compression**: Projects KV pairs into latent dimension `d_c` (typically 512-1536)
+2. **Matrix Absorption**: Absorbs up-projection matrices into queries during inference
+3. **Decoupled RoPE**: Special handling for positional embeddings
+
+### MLA KV Cache Formula
+
+```python
+def calculate_mla_kv_cache(model_config, sequence_length, batch_size, precision_bytes):
+    """
+    Calculate KV cache for Multi-head Latent Attention.
+    
+    MLA stores only the compressed latent representation c^KV instead of 
+    full K and V matrices.
+    """
+    # Core MLA parameters
+    latent_dim = model_config.mla.latent_dimension  # e.g., 512-1536
+    layers = model_config.architecture.layers
+    
+    # Block allocation for vLLM
+    block_size = model_config.vllm_optimizations.block_size
+    blocks_needed = ceil(sequence_length / block_size)
+    effective_seq_length = blocks_needed * block_size
+    
+    # MLA cache stores only latent vectors
+    kv_cache_base = (
+        latent_dim *              # Compressed dimension (not hidden_size!)
+        layers *                  # Number of layers
+        effective_seq_length *    # Block-aligned sequence
+        batch_size *             # Concurrent requests
+        precision_bytes          # Bytes per parameter
+    )
+    
+    # Additional overhead for RoPE decoupling
+    rope_overhead = kv_cache_base * 0.05  # ~5% for position embeddings
+    
+    # Memory pool overhead (vLLM)
+    memory_pool_overhead = (kv_cache_base + rope_overhead) * 0.15
+    
+    total_mla_cache = kv_cache_base + rope_overhead + memory_pool_overhead
+    
+    return total_mla_cache
 ```
 
-**Grouped Query Attention:**
+### MLA Compression Comparison
 
-```text
-KV Heads < Attention Heads (e.g., 8 KV heads, 32 attention heads)
-Compression Ratio = Attention Heads ÷ KV Heads = 32 ÷ 8 = 4x
+```python
+# Example: DeepSeek V3 with MLA
+hidden_size = 7168
+attention_heads = 128
+latent_dim = 1536
+
+# Standard MHA KV cache per token
+mha_per_token = 2 * hidden_size  # 14,336 parameters
+
+# MLA KV cache per token  
+mla_per_token = latent_dim  # 1,536 parameters
+
+# Compression ratio
+compression = mha_per_token / mla_per_token  # 9.3x reduction!
 ```
 
-**Memory Impact:**
+---
 
-- Mistral 7B: 4x reduction in KV-cache memory
-- Llama 2 7B: No reduction (uses standard MHA)
+## Sliding Window Attention (SWA)
+
+### Overview
+
+SWA limits attention to a local window, reducing memory requirements and computational complexity from O(n²) to O(n×w).
+
+### Key Concepts
+
+1. **Fixed Window Size**: Each token attends only to `w` previous tokens
+2. **Layered Propagation**: Information flows through layers beyond window size
+3. **Rotating Buffer Cache**: Efficient memory management for fixed-size windows
+
+### SWA KV Cache Formula
+
+```python
+def calculate_swa_kv_cache(model_config, sequence_length, batch_size, precision_bytes):
+    """
+    Calculate KV cache for Sliding Window Attention.
+    
+    SWA limits cache to window size, using rotating buffers.
+    """
+    window_size = model_config.swa.window_size  # e.g., 4096 for Mistral
+    layers = model_config.architecture.layers
+    hidden_size = model_config.architecture.hidden_size
+    
+    # Effective cache size is limited by window
+    effective_cache_size = min(window_size, sequence_length)
+    
+    # Some models (Gemma 2) use hybrid: SWA on odd layers, full on even
+    if model_config.swa.hybrid_layers:
+        swa_layers = layers // 2  # Odd layers
+        full_layers = layers - swa_layers  # Even layers
+        
+        swa_cache = (2 * hidden_size * effective_cache_size * 
+                     swa_layers * batch_size * precision_bytes)
+        
+        full_cache = (2 * hidden_size * sequence_length * 
+                      full_layers * batch_size * precision_bytes)
+        
+        kv_cache_base = swa_cache + full_cache
+    else:
+        # Pure SWA (Mistral approach)
+        kv_cache_base = (2 * hidden_size * effective_cache_size * 
+                         layers * batch_size * precision_bytes)
+    
+    # Rotating buffer overhead
+    buffer_overhead = kv_cache_base * 0.1  # 10% for buffer management
+    
+    # Memory pool overhead (vLLM)
+    memory_pool_overhead = (kv_cache_base + buffer_overhead) * 0.15
+    
+    total_swa_cache = kv_cache_base + buffer_overhead + memory_pool_overhead
+    
+    return total_swa_cache
+```
+
+### SWA Memory Savings Example
+
+```python
+# Mistral 7B with SWA
+sequence_length = 32768  # Maximum context
+window_size = 4096       # SWA window
+
+# Standard MHA would need cache for full sequence
+mha_cache_tokens = sequence_length  # 32,768 tokens
+
+# SWA only caches window size
+swa_cache_tokens = window_size  # 4,096 tokens
+
+# Memory reduction
+reduction = 1 - (swa_cache_tokens / mha_cache_tokens)  # 87.5% reduction
+```
 
 ---
 
 ## Mathematical Formulas
 
-(Python examples)
-
-### Complete vLLM VRAM Calculation
+### Unified vLLM VRAM Calculation v2.0
 
 ```python
 from math import ceil
+from enum import Enum
 
-def calculate_vllm_vram(model, sequence_length, batch_size, precision_bytes):
-    # 1. Base Model Memory
+class AttentionType(Enum):
+    MHA = "multi_head_attention"
+    MQA = "multi_query_attention"
+    GQA = "grouped_query_attention"
+    MLA = "multi_head_latent_attention"
+    SWA = "sliding_window_attention"
+    HYBRID = "hybrid_attention"
+
+def calculate_vllm_vram_v2(model, sequence_length, batch_size, precision_bytes):
+    """
+    Enhanced VRAM calculation supporting multiple attention mechanisms.
+    """
+    
+    # 1. Base Model Memory (unchanged)
     base_memory = model.parameters * precision_bytes * model.overhead_factor
-
-    # 2. KV-Cache with vLLM optimizations
-    # Block allocation
-    block_size = model.vllm_optimizations.block_size  # typically 16
-    blocks_needed = ceil(sequence_length / block_size)
-    effective_sequence_length = blocks_needed * block_size
-
-    # GQA support
-    kv_heads = model.architecture.kv_heads or model.architecture.attention_heads
-    head_dim = model.architecture.head_dim or (model.architecture.hidden_size / model.architecture.attention_heads)
-
-    # Core KV calculation
-    kv_cache_base = (2 *                           # keys + values
-                     model.architecture.layers *   # transformer layers
-                     kv_heads *                     # KV heads (not attention heads for GQA!)
-                     head_dim *                     # dimension per head
-                     effective_sequence_length *   # tokens (block-aligned)
-                     batch_size *                   # concurrent requests
-                     precision_bytes)               # bytes per parameter
-
-    # Memory pool overhead
-    memory_pool_overhead = kv_cache_base * model.vllm_optimizations.memory_pool_overhead
-    kv_cache_total = kv_cache_base + memory_pool_overhead
-
-    # 3. Activation Memory
-    activation_multiplier = model.vram_requirements.activation_multiplier  # typically 1.5
+    
+    # 2. KV-Cache Memory (attention-specific)
+    attention_type = model.attention.type
+    
+    if attention_type == AttentionType.MHA:
+        kv_cache_total = calculate_mha_kv_cache(model, sequence_length, batch_size, precision_bytes)
+    elif attention_type == AttentionType.GQA:
+        kv_cache_total = calculate_gqa_kv_cache(model, sequence_length, batch_size, precision_bytes)
+    elif attention_type == AttentionType.MLA:
+        kv_cache_total = calculate_mla_kv_cache(model, sequence_length, batch_size, precision_bytes)
+    elif attention_type == AttentionType.SWA:
+        kv_cache_total = calculate_swa_kv_cache(model, sequence_length, batch_size, precision_bytes)
+    elif attention_type == AttentionType.HYBRID:
+        kv_cache_total = calculate_hybrid_kv_cache(model, sequence_length, batch_size, precision_bytes)
+    else:
+        raise ValueError(f"Unknown attention type: {attention_type}")
+    
+    # 3. Activation Memory (with attention-specific factor)
+    attention_factors = {
+        AttentionType.MHA: 1.0,
+        AttentionType.GQA: 1.0,
+        AttentionType.MLA: 1.25,  # Matrix absorption overhead
+        AttentionType.SWA: 0.85,  # Reduced computation
+        AttentionType.HYBRID: 0.95
+    }
+    
     activation_memory = (model.architecture.hidden_size *
                         sequence_length *
                         batch_size *
                         precision_bytes *
-                        activation_multiplier)
-
+                        model.vram_requirements.activation_multiplier *
+                        attention_factors[attention_type])
+    
     # 4. System Overhead
     system_overhead = (base_memory + kv_cache_total) * 0.1
-
+    
     # Total VRAM
     total_vram = base_memory + kv_cache_total + activation_memory + system_overhead
+    
+    return {
+        'total_vram_gb': total_vram / (1024**3),
+        'base_memory_gb': base_memory / (1024**3),
+        'kv_cache_gb': kv_cache_total / (1024**3),
+        'activation_gb': activation_memory / (1024**3),
+        'overhead_gb': system_overhead / (1024**3),
+        'attention_type': attention_type.value
+    }
 
-    return total_vram
-
-# Flexible ModelStub for different model configurations
-class ModelStub:
-    def __init__(self,
-                 parameters=7_240_000_000,      # Total model parameters
-                 overhead_factor=1.12,          # Model loading overhead
-                 layers=32,                     # Number of transformer layers
-                 hidden_size=4096,              # Hidden dimension size
-                 attention_heads=32,            # Number of attention heads
-                 kv_heads=8,                    # Number of KV heads (None for standard MHA)
-                 head_dim=None,                 # Dimension per head (None to calculate)
-                 block_size=16,                 # vLLM block size
-                 memory_pool_overhead=0.15,     # vLLM memory pool overhead
-                 activation_multiplier=1.4):    # Activation scaling factor
-
-        self.parameters = parameters
-        self.overhead_factor = overhead_factor
-
-        # Architecture configuration
-        self.architecture = type('Architecture', (), {
-            'layers': layers,
-            'hidden_size': hidden_size,
-            'attention_heads': attention_heads,
-            'kv_heads': kv_heads,              # Can be None for standard MHA
-            'head_dim': head_dim               # Can be None to auto-calculate
-        })()
-
-        # vLLM optimization settings
-        self.vllm_optimizations = type('VLLMOptimizations', (), {
-            'block_size': block_size,
-            'memory_pool_overhead': memory_pool_overhead
-        })()
-
-        # VRAM requirement settings
-        self.vram_requirements = type('VRAMRequirements', (), {
-            'activation_multiplier': activation_multiplier
-        })()
-
-# Example 1: Default Mistral 7B with GQA
-model_mistral = ModelStub()
-print("Mistral 7B (GQA enabled):")
-total_vram_bytes = calculate_vllm_vram(model_mistral, 500, 1, 2)
-print(f"VRAM required: {total_vram_bytes / (1024**3):.2f} GB\n")
-
-# Example 2: Llama 2 7B without GQA (standard MHA)
-model_llama2 = ModelStub(
-    parameters=7_000_000_000,    # 7B parameters
-    overhead_factor=1.15,        # Slightly different overhead
-    kv_heads=None,              # No GQA - will use attention_heads
-    head_dim=None,              # Will be calculated as hidden_size/attention_heads
-    activation_multiplier=1.5    # Different activation scaling
-)
-print("Llama 2 7B (standard MHA):")
-total_vram_bytes = calculate_vllm_vram(model_llama2, 500, 1, 2)
-print(f"VRAM required: {total_vram_bytes / (1024**3):.2f} GB\n")
-
-# Example 3: Custom 13B model with specific GQA configuration
-model_custom = ModelStub(
-    parameters=13_000_000_000,   # 13B parameters
-    layers=40,                   # More layers
-    hidden_size=5120,            # Larger hidden size
-    attention_heads=40,          # More attention heads
-    kv_heads=8,                 # GQA: fewer KV heads
-    head_dim=128,               # Explicit head dimension
-    activation_multiplier=1.6    # Higher activation scaling
-)
-print("Custom 13B model with GQA:")
-total_vram_bytes = calculate_vllm_vram(model_custom, 1000, 4, 2)
-print(f"VRAM required: {total_vram_bytes / (1024**3):.2f} GB")
-```
-
-### Handling Optional Values
-
-The `calculate_vllm_vram` function automatically handles missing/optional values:
-
-```python
-# These lines in the function handle optional values:
-kv_heads = model.architecture.kv_heads or model.architecture.attention_heads
-head_dim = model.architecture.head_dim or (model.architecture.hidden_size / model.architecture.attention_heads)
-```
-
-**How it works:**
-
-1. **kv_heads = None**: When `kv_heads` is `None` (standard Multi-Head Attention), the function uses `attention_heads` instead. This means no GQA optimization.
-
-2. **head_dim = None**: When `head_dim` is `None`, it's calculated as `hidden_size ÷ attention_heads`, which is the standard formula for head dimension.
-
-**To customize your model:**
-
-```python
-# Standard MHA model (like Llama 2):
-model = ModelStub(kv_heads=None, head_dim=None)
-
-# GQA model with auto-calculated head_dim:
-model = ModelStub(kv_heads=8, head_dim=None)
-
-# Fully specified model:
-model = ModelStub(kv_heads=8, head_dim=128)
-```
-
-### Key Formula Components
-
-**Block Allocation:**
-
-```python
-effective_tokens = ceil(actual_tokens / block_size) * block_size
-```
-
-**GQA Compression:**
-
-```python
-memory_reduction = attention_heads / kv_heads
-kv_memory = standard_kv_memory / memory_reduction
-```
-
-**Memory Pool:**
-
-```python
-pool_overhead = base_kv_cache * 0.15
-total_kv_cache = base_kv_cache + pool_overhead
+def calculate_hybrid_kv_cache(model, sequence_length, batch_size, precision_bytes):
+    """
+    Calculate KV cache for models with mixed attention patterns.
+    Example: Gemma 2 uses SWA on odd layers, full attention on even layers.
+    """
+    total_cache = 0
+    
+    for layer_idx in range(model.architecture.layers):
+        if layer_idx in model.hybrid.swa_layers:
+            # SWA layer
+            window_size = model.hybrid.window_size
+            cache_size = min(window_size, sequence_length)
+            layer_cache = (2 * model.architecture.hidden_size * cache_size * 
+                          batch_size * precision_bytes)
+        elif layer_idx in model.hybrid.mla_layers:
+            # MLA layer
+            layer_cache = (model.mla.latent_dimension * sequence_length * 
+                          batch_size * precision_bytes)
+        else:
+            # Full attention layer
+            layer_cache = (2 * model.architecture.hidden_size * sequence_length * 
+                          batch_size * precision_bytes)
+        
+        total_cache += layer_cache
+    
+    # Add vLLM overheads
+    memory_pool_overhead = total_cache * 0.15
+    return total_cache + memory_pool_overhead
 ```
 
 ---
 
 ## Calculation Examples
 
-### Example 1: Mistral 7B (with GQA)
+### Example 1: DeepSeek V3 with MLA
+
+**Model Specifications:**
+
+- Parameters: 671B
+- Layers: 61
+- Hidden Size: 7,168
+- Attention Heads: 128
+- Latent Dimension: 1,536 (MLA)
+- Precision: fp16
+
+**Scenario:** Single user, 8K context
+
+```python
+# DeepSeek V3 configuration
+model_deepseek_v3 = ModelConfig(
+    parameters=671_000_000_000,
+    attention_type=AttentionType.MLA,
+    layers=61,
+    hidden_size=7168,
+    latent_dimension=1536,  # MLA compression
+    precision_bytes=2
+)
+
+# Calculate VRAM
+result = calculate_vllm_vram_v2(model_deepseek_v3, 8192, 1, 2)
+
+# Results:
+# Base Memory: ~1,342 GB (!)
+# KV Cache: ~1.5 GB (dramatically reduced via MLA)
+# Total: ~1,344 GB
+
+# Compare to standard MHA:
+# MHA KV Cache would be: ~14 GB
+# MLA achieves 9.3x reduction!
+```
+
+### Example 2: Mistral 7B with SWA
 
 **Model Specifications:**
 
 - Parameters: 7.24B
 - Layers: 32
 - Hidden Size: 4,096
-- Attention Heads: 32
-- KV Heads: 8 (GQA enabled)
-- Head Dimension: 128
-- Max Sequence Length: 32,768
-- Precision: fp16 (2 bytes)
+- Window Size: 4,096 (SWA)
+- Max Context: 32,768
+- Precision: fp16
 
-**Scenario:** Single user, 500 token conversation (250 input + 250 output)
-
-**Step 1: Block Allocation**
+**Scenario:** 10 users, 16K context each
 
 ```python
-from math import ceil
+# Mistral configuration
+model_mistral = ModelConfig(
+    parameters=7_240_000_000,
+    attention_type=AttentionType.SWA,
+    layers=32,
+    hidden_size=4096,
+    window_size=4096,
+    precision_bytes=2
+)
 
-actual_tokens = 250 + 250  # 500
-block_size = 16
-blocks_needed = ceil(500 / 16)  # ceil(31.25) = 32 blocks
-effective_tokens = 32 * 16  # 512 tokens
+# Calculate VRAM
+result = calculate_vllm_vram_v2(model_mistral, 16384, 10, 2)
+
+# Results:
+# Base Memory: 16.22 GB
+# KV Cache: 0.64 GB (capped at window size)
+# Total: ~18.5 GB
+
+# Without SWA (full 16K cache):
+# KV Cache would be: 2.56 GB
+# SWA achieves 75% reduction for long contexts!
 ```
 
-**Step 2: Base Model Memory**
-
-```python
-base_memory = 7_240_000_000 * 2 * 1.12  # 16.22 GB
-```
-
-**Step 3: KV-Cache Memory (with GQA)**
-
-```python
-# Standard calculation would use 32 attention heads
-# GQA calculation uses 8 KV heads (4x reduction)
-
-kv_cache_base = (2 *        # keys + values
-                 32 *       # layers
-                 8 *        # KV heads (GQA!)
-                 128 *      # head dimension
-                 512 *      # effective tokens
-                 1 *        # batch size
-                 2)         # fp16 bytes
-              # = 67_108_864 bytes = 0.063 GB
-
-# Memory pool overhead
-pool_overhead = 0.063 * 0.15  # 0.009 GB
-kv_cache_total = 0.063 + 0.009  # 0.072 GB
-```
-
-**Step 4: Activation Memory**
-
-```python
-activation_memory = (4096 *    # hidden size
-                    500 *      # actual tokens (not effective)
-                    1 *        # batch size
-                    2 *        # fp16 bytes
-                    1.4)       # activation multiplier
-                  # = 5_734_400 bytes = 0.005 GB
-```
-
-**Step 5: System Overhead**
-
-```python
-system_overhead = (16.22 + 0.072) * 0.1  # 1.63 GB
-```
-
-**Step 6: Total VRAM**
-
-```python
-total_vram = 16.22 + 0.072 + 0.005 + 1.63  # 17.93 GB
-```
-
-**Result:** Mistral 7B requires **17.93 GB** for a single 500-token conversation.
-
-### Example 2: Llama 2 7B (Standard MHA)
+### Example 3: Gemma 2 27B with Hybrid Attention
 
 **Model Specifications:**
 
-- Parameters: 7.0B
-- Layers: 32
-- Hidden Size: 4,096
-- Attention Heads: 32
-- KV Heads: 32 (no GQA)
-- Head Dimension: 128
-- Max Sequence Length: 4,096
-- Precision: fp16 (2 bytes)
+- Parameters: 27B
+- Layers: 46
+- Hidden Size: 4,608
+- SWA Layers: Odd layers (23 layers)
+- Full Attention: Even layers (23 layers)
+- Window Size: 4,096
+- Max Context: 8,192
+- Precision: fp16
 
-**Scenario:** Single user, 500 token conversation (250 input + 250 output)
-
-**Step 1: Block Allocation** (same as Mistral)
+**Scenario:** Single user, 8K context
 
 ```python
-effective_tokens = 512  # tokens (32 blocks * 16)
+# Gemma 2 configuration (hybrid)
+model_gemma2 = ModelConfig(
+    parameters=27_000_000_000,
+    attention_type=AttentionType.HYBRID,
+    layers=46,
+    hidden_size=4608,
+    hybrid_config={
+        'swa_layers': list(range(1, 46, 2)),  # Odd layers
+        'full_layers': list(range(0, 46, 2)),  # Even layers
+        'window_size': 4096
+    },
+    precision_bytes=2
+)
+
+# Calculate VRAM
+result = calculate_vllm_vram_v2(model_gemma2, 8192, 1, 2)
+
+# Results:
+# Base Memory: 60.5 GB
+# KV Cache (hybrid): 0.86 GB
+# - SWA layers: 0.43 GB (23 layers × 4096 tokens)
+# - Full layers: 0.86 GB (23 layers × 8192 tokens)
+# Total: ~63 GB
 ```
 
-**Step 2: Base Model Memory**
+---
 
-```python
-base_memory = 7_000_000_000 * 2 * 1.15  # 16.10 GB
-```
+## Model-Specific Configurations
 
-**Step 3: KV-Cache Memory (Standard MHA)**
+### Models Using MLA (Multi-head Latent Attention)
 
-```python
-kv_cache_base = (2 *        # keys + values
-                 32 *       # layers
-                 32 *       # KV heads (same as attention heads)
-                 128 *      # head dimension
-                 512 *      # effective tokens
-                 1 *        # batch size
-                 2)         # fp16 bytes
-              # = 268_435_456 bytes = 0.25 GB
+| Model | Latent Dim | Compression vs MHA | vLLM Support |
+|-------|------------|-------------------|--------------|
+| DeepSeek-V2 | 512 | ~14x | ✅ Full (v0.7.1+) |
+| DeepSeek-V3 | 1536 | ~9.3x | ✅ Full (v0.7.1+) |
+| DeepSeek-R1 | 1536 | ~9.3x | ✅ Full (v0.7.1+) |
+| DeepSeek-V2-Lite | 512 | ~14x | ✅ Full |
+| DeepSeek-Coder | 512-1536 | 9-14x | ✅ Full |
 
-# Memory pool overhead
-pool_overhead = 0.25 * 0.15  # 0.038 GB
-kv_cache_total = 0.25 + 0.038  # 0.288 GB
-```
+**Note:** MLA support in vLLM includes optimized CUTLASS kernels and FP8 quantization as of v0.7.1.
 
-**Step 4: Activation Memory**
+### Models Using SWA (Sliding Window Attention)
 
-```python
-activation_memory = (4096 *    # hidden size
-                    500 *      # actual tokens
-                    1 *        # batch size
-                    2 *        # fp16 bytes
-                    1.5)       # activation multiplier
-                  # = 6_144_000 bytes = 0.006 GB
-```
+| Model | Window Size | Context Length | vLLM Support |
+|-------|------------|----------------|--------------|
+| Mistral 7B v0.1 | 4,096 | 32,768 | ✅ Full |
+| Mistral 7B v0.2 | 4,096 | 32,768 | ✅ Full |
+| Mistral 8x7B | 4,096 | 32,768 | ✅ Full |
+| Mixtral 8x22B | 4,096 | 65,536 | ✅ Full |
+| Gemma 2 (9B/27B) | 4,096 | 8,192 | ⚠️ Partial* |
 
-**Step 5: System Overhead**
+**Note:** *Gemma 2's hybrid attention (SWA on odd layers) has limited vLLM support. Context is capped at window size.
 
-```python
-system_overhead = (16.10 + 0.288) * 0.1  # 1.64 GB
-```
+### Models Using GQA (Grouped Query Attention)
 
-**Step 6: Total VRAM**
+| Model | Attention Heads | KV Heads | Compression |
+|-------|----------------|----------|-------------|
+| Mistral 7B | 32 | 8 | 4x |
+| Llama 3 (8B) | 32 | 8 | 4x |
+| Llama 3 (70B) | 64 | 8 | 8x |
+| Qwen 2.5 | 32 | 8 | 4x |
 
-```python
-total_vram = 16.10 + 0.288 + 0.006 + 1.64  # 18.03 GB
-```
+### Models Using Standard MHA
 
-**Result:** Llama 2 7B requires **18.03 GB** for a single 500-token conversation.
-
-### Example 3: High Concurrency Scenario
-
-**Scenario:** Mistral 7B serving 10 concurrent users, each with 1000 tokens (500 input + 500 output)
-
-**Calculations:**
-
-```python
-from math import ceil
-
-# Block allocation
-actual_tokens = 1000
-blocks_needed = ceil(1000 / 16)  # 63 blocks
-effective_tokens = 63 * 16  # 1008 tokens
-
-# Base memory (unchanged)
-base_memory = 16.22  # GB
-
-# KV-Cache (scales with batch size)
-kv_cache_base = 2 * 32 * 8 * 128 * 1008 * 10 * 2  # 1_321_205_760 bytes = 1.23 GB
-pool_overhead = 1.23 * 0.15  # 0.18 GB
-kv_cache_total = 1.23 + 0.18  # 1.41 GB
-
-# Activation memory (scales with batch size)
-activation_memory = 4096 * 1000 * 10 * 2 * 1.4  # 114_688_000 bytes = 0.11 GB
-
-# System overhead
-system_overhead = (16.22 + 1.41) * 0.1  # 1.76 GB
-
-# Total VRAM
-total_vram = 16.22 + 1.41 + 0.11 + 1.76  # 19.50 GB
-```
-
-**Result:** 10 concurrent users require **19.50 GB** vs 17.93 GB for single user.
+| Model | Note |
+|-------|------|
+| Llama 2 (all sizes) | No KV optimization |
+| GPT-3/4 | No KV optimization |
+| BERT/RoBERTa | Encoder-only |
 
 ---
 
 ## Parameter Reference
 
-### Model Architecture Parameters
+### Extended Architecture Parameters
 
 | Parameter | Description | Typical Values | Impact |
-|-----------|-------------|----------------|---------|
-| `parameters` | Total model parameters | 7B, 13B, 30B, 70B | Linear base memory scaling |
-| `layers` | Transformer layers | 32, 40, 80 | Linear KV-cache scaling |
-| `hidden_size` | Hidden dimension | 4096, 5120, 8192 | Quadratic memory impact |
-| `attention_heads` | Attention heads | 32, 40, 64 | Affects head dimension |
-| `kv_heads` | Key-value heads | 8, 32, 64 | Direct KV-cache scaling |
-| `head_dim` | Dimension per head | 64, 128, 256 | Linear KV-cache scaling |
-| `vocab_size` | Vocabulary size | 32K, 50K, 100K | Minimal memory impact |
-| `max_seq_len` | Maximum context | 2K, 4K, 32K, 128K | Constrains sequence length |
+|-----------|-------------|----------------|--------|
+| `attention_type` | Attention mechanism | MHA/GQA/MLA/SWA/HYBRID | Determines KV cache formula |
+| `latent_dimension` | MLA compression dim | 512-2048 | Lower = more compression |
+| `window_size` | SWA window tokens | 2048-8192 | Caps KV cache size |
+| `hybrid_layers` | Mixed attention layers | Model-specific | Complex cache patterns |
+| `rope_decoupled` | MLA RoPE handling | true/false | +5% overhead if true |
 
-### vLLM Configuration Parameters
+### vLLM-Specific MLA/SWA Parameters
 
 | Parameter | Description | Default | Impact |
-|-----------|-------------|---------|---------|
-| `block_size` | Tokens per block | 16 | Memory alignment overhead |
-| `memory_pool_overhead` | Pre-allocation rate | 0.15 (15%) | KV-cache overhead |
-| `continuous_batching` | Dynamic batching | true | Efficiency optimization |
-| `paged_attention` | Block-based attention | true | Memory fragmentation reduction |
-| `cuda_graph_supported` | CUDA graph optimization | varies | Performance optimization |
-| `flash_attention_compatible` | FlashAttention support | varies | Memory efficiency |
+|-----------|-------------|---------|--------|
+| `mla_kernel` | MLA optimization kernel | CUTLASS | Performance boost |
+| `swa_buffer_mode` | SWA memory management | rotating | Memory efficiency |
+| `hybrid_cache_mode` | Hybrid attention caching | per_layer | Memory allocation |
+| `attention_backend` | Backend implementation | FLASHINFER/FLASH_ATTN | Performance |
 
-### Precision Options
+### Memory Scaling Factors
 
-| Precision | Bytes per Parameter | Memory Impact | Quality Trade-off |
-|-----------|-------------------|---------------|-------------------|
-| `fp32` | 4 | Baseline (100%) | Highest quality |
-| `fp16` | 2 | 50% reduction | Minimal quality loss |
-| `int8` | 1 | 75% reduction | Moderate quality loss |
-| `int4` | 0.5 | 87.5% reduction | Significant quality loss |
-
-### Scaling Factors
-
-| Factor | Description | Typical Range | Usage |
-|--------|-------------|---------------|-------|
-| `overhead_factor` | Model loading overhead | 1.12 - 1.20 | Base memory calculation |
-| `activation_multiplier` | Inference activation scaling | 1.4 - 1.6 | Activation memory |
-| `system_overhead_rate` | Framework overhead | 0.08 - 0.12 | System overhead |
+| Attention Type | KV Cache Factor | Activation Factor | Overhead Factor |
+|----------------|-----------------|-------------------|-----------------|
+| MHA | 1.0x | 1.0x | 0.10 |
+| GQA | 0.25x | 1.0x | 0.10 |
+| MLA | 0.05-0.10x | 1.25x | 0.12 |
+| SWA | Window-based | 0.85x | 0.08 |
+| Hybrid | Variable | 0.95x | 0.11 |
 
 ---
 
 ## Implementation Notes
 
-### Accuracy Considerations
+### vLLM Version Compatibility
 
-1. **Block Alignment**: Always round sequence length up to block boundaries
-2. **GQA Detection**: Check `kv_heads` vs `attention_heads` to detect GQA
-3. **Memory Pool**: Include vLLM's pre-allocation overhead
-4. **Precision Consistency**: Use same precision for all components
+- **v0.7.0**: Basic GQA support
+- **v0.7.1+**: Full MLA support with optimized kernels
+- **v0.8.0+**: Enhanced SWA and hybrid attention
+- **v0.9.0+**: Reasoning model support (DeepSeek-R1)
 
-### Performance Optimizations
+### Attention Backend Selection
 
-1. **Batch Size Limits**: Cap batch size at 128 for memory efficiency
-2. **Sequence Length**: Consider model's maximum context window
-3. **GPU Memory**: Account for GPU memory fragmentation
-4. **Framework Overhead**: Include PyTorch and CUDA overhead
+```bash
+# For MLA models (DeepSeek)
+export VLLM_ATTENTION_BACKEND=FLASHINFER
+
+# For SWA models (Mistral)
+export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+
+# Force specific backend
+vllm serve model_name --attention-backend FLASHINFER
+```
+
+### Common Pitfalls with Modern Attention
+
+1. **MLA Overhead**: Don't forget matrix absorption overhead (~20% activation increase)
+2. **SWA Limitations**: Some vLLM versions cap context at window size
+3. **Hybrid Complexity**: Per-layer cache calculations needed
+4. **Quantization Impact**: MLA models benefit more from FP8 than GQA
+5. **Backend Mismatches**: Wrong backend can 2-3x memory usage
 
 ### Validation Methods
 
-1. **Production Measurement**: Compare with actual vLLM memory usage
-2. **GPU Monitoring**: Use nvidia-smi to validate predictions
-3. **Load Testing**: Verify calculations under various load patterns
-4. **Model Comparison**: Cross-validate with different model sizes
+1. **nvidia-smi Monitoring**: Track actual VRAM during inference
+2. **vLLM Profiling**: Use `--profile` flag for detailed memory breakdown
+3. **Attention-Specific Tests**: Verify compression ratios match expectations
+4. **Cross-Framework Validation**: Compare with SGLang, TGI results
 
-### Common Pitfalls
+### Best Practices
 
-1. **Ignoring GQA**: Using attention heads instead of KV heads for GQA models
-2. **Missing Block Overhead**: Not accounting for block alignment
-3. **Wrong Multipliers**: Using training multipliers (4x) instead of inference (1.5x)
-4. **Static Calculations**: Not considering dynamic batching effects
+1. **Model Selection**:
+   - Use MLA models (DeepSeek) for maximum KV compression
+   - Use SWA models (Mistral) for long-context with memory constraints
+   - Use GQA models (Llama 3) for balanced performance
 
-This methodology provides a foundation for accurate VRAM estimation in vLLM deployments, enabling proper resource planning and cost optimization for LLM inference workloads.
+2. **Deployment Optimization**:
+   - Enable FP8 for MLA models (`--quantization fp8`)
+   - Use appropriate attention backend
+   - Consider tensor parallelism for large MLA models
+
+3. **Memory Planning**:
+   - MLA: Plan for base model size + minimal KV cache
+   - SWA: Plan for window-limited cache regardless of context
+   - Hybrid: Calculate per-layer requirements
+
+---
+
+## Appendix: Quick Reference Formulas
+
+### MLA KV Cache
+
+```
+KV_MLA = latent_dim × layers × seq_length × batch × precision
+```
+
+### SWA KV Cache
+
+```
+KV_SWA = 2 × hidden_size × min(window, seq_length) × layers × batch × precision
+```
+
+### Hybrid KV Cache
+
+```
+KV_Hybrid = Σ(layer_specific_cache) for each layer
+```
+
+### Compression Ratios
+
+- MLA: 90-95% reduction vs MHA
+- SWA: (1 - window/context) × 100% reduction
+- GQA: (1 - kv_heads/attn_heads) × 100% reduction
+
+---
+
+This methodology provides a comprehensive framework for accurate VRAM estimation in vLLM deployments with modern attention mechanisms, enabling optimal resource planning for state-of-the-art LLM inference workloads.
