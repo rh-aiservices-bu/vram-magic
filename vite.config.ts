@@ -168,53 +168,27 @@ export default defineConfig(({ command, mode }) => {
         external: [],
 
         output: {
-          // More granular code splitting
+          // Code splitting - keep React+MUI+Emotion together to avoid circular dep issues
           manualChunks: id => {
-            // Vendor chunk for core React ecosystem
             if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('react-dom')) {
-                return 'vendor-react'
+              // React, MUI, and Emotion must stay in one chunk to avoid initialization errors
+              if (
+                id.includes('react') ||
+                id.includes('react-dom') ||
+                id.includes('@mui') ||
+                id.includes('@emotion')
+              ) {
+                return 'vendor-core'
               }
 
-              // Material UI chunk (large library)
-              if (id.includes('@mui') || id.includes('@emotion')) {
-                return 'vendor-mui'
-              }
-
-              // Charts chunk
+              // Charts chunk (self-contained)
               if (id.includes('recharts') || id.includes('d3-')) {
                 return 'vendor-charts'
-              }
-
-              // DnD chunk
-              if (id.includes('react-dnd')) {
-                return 'vendor-dnd'
-              }
-
-              // Validation and utilities
-              if (id.includes('zod') || id.includes('ajv')) {
-                return 'vendor-validation'
               }
 
               // All other node_modules
               return 'vendor-misc'
             }
-
-            // Application code splitting
-            if (id.includes('/src/components/')) {
-              return 'components'
-            }
-
-            if (id.includes('/src/services/')) {
-              return 'services'
-            }
-
-            if (id.includes('/src/contexts/')) {
-              return 'contexts'
-            }
-
-            // Default chunk
-            return 'index'
           },
 
           // Optimize chunk file names

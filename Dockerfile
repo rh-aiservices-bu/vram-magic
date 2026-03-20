@@ -1,5 +1,5 @@
 # VRAM Magic - Production Docker Configuration
-# Multi-stage build for optimal production deployment
+# Multi-stage build, OpenShift compatible (random UID, GID 0)
 
 # Stage 1: Build environment
 FROM node:20-alpine AS builder
@@ -13,6 +13,12 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
+    autoconf \
+    automake \
+    libtool \
+    nasm \
+    zlib-dev \
+    libpng-dev \
     && rm -rf /var/cache/apk/*
 
 # Copy package files
@@ -21,7 +27,7 @@ COPY tsconfig*.json ./
 COPY vite.config.ts ./
 
 # Install dependencies with npm ci for reproducible builds
-RUN npm ci --only=production=false
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -53,10 +59,6 @@ FROM nginx:1.25-alpine AS production
 # Install security updates
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S vrammagic -u 1001 -G nodejs
-
 # Copy built application
 COPY --from=builder /app/dist /usr/share/nginx/html
 
@@ -64,25 +66,13 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/default.conf /etc/nginx/conf.d/default.conf
 
-# Create nginx cache directories
-RUN mkdir -p /var/cache/nginx/client_temp \
-    /var/cache/nginx/proxy_temp \
-    /var/cache/nginx/fastcgi_temp \
-    /var/cache/nginx/uwsgi_temp \
-    /var/cache/nginx/scgi_temp && \
-    chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /usr/share/nginx/html && \
-    chmod -R 755 /usr/share/nginx/html
+# OpenShift compatibility: make directories writable by GID 0 (root group)
+# OpenShift runs with a random UID but always GID 0
+RUN chgrp -R 0 /usr/share/nginx/html /etc/nginx/conf.d /var/cache/nginx /var/log/nginx && \
+    chmod -R g=u /usr/share/nginx/html /etc/nginx/conf.d /var/cache/nginx /var/log/nginx
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:80/ || exit 1
-
-# Security: Run as non-root user
-USER nginx
-
-# Expose port
-EXPOSE 80
+# Expose unprivileged port
+EXPOSE 8080
 
 # Labels for metadata
 LABEL maintainer="VRAM Magic Team" \
@@ -92,6 +82,9 @@ LABEL maintainer="VRAM Magic Team" \
       org.opencontainers.image.title="VRAM Magic" \
       org.opencontainers.image.description="React application for calculating GPU memory requirements" \
       org.opencontainers.image.version="0.1.0"
+
+# Run as non-root (OpenShift will override UID but keep GID 0)
+USER 1001
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
